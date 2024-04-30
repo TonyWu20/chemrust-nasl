@@ -26,7 +26,7 @@ mod circle_circle {
 
     use nalgebra::{Matrix3x2, Point3, UnitVector3, Vector2, Vector3};
 
-    use crate::analysis::geometry::primitives::Circle3d;
+    use crate::analysis::geometry::primitives::{Circle3d, Plane};
 
     use super::plane_plane_intersection;
 
@@ -45,6 +45,14 @@ mod circle_circle {
         let plane_1 = c1.plane_of_circle();
         let plane_2 = c2.plane_of_circle();
         let p_p = plane_plane_intersection(&plane_1, &plane_2);
+        println!("{:?}", p_p);
+        let plane_3 = Plane::new(UnitVector3::new_normalize(Vector3::new(1.0, 0.0, 0.0)), 3.0);
+        let plane_4 = Plane::new(UnitVector3::new_normalize(Vector3::new(0.0, 1.0, 0.0)), 6.0);
+        let p_p = plane_plane_intersection(&plane_3, &plane_4);
+        println!("{:?}", p_p);
+        let plane_5 = Plane::new(UnitVector3::new_normalize(Vector3::new(1.0, 0.0, 0.0)), 3.0);
+        let plane_6 = Plane::new(UnitVector3::new_normalize(Vector3::new(1.0, 0.0, 0.0)), 6.0);
+        let p_p = plane_plane_intersection(&plane_5, &plane_6);
         println!("{:?}", p_p);
     }
     #[test]
