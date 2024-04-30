@@ -14,3 +14,5 @@ keywords = ["chemistry", "chemistry_research", "catalysis_research", "geometry"]
 
 [dependencies]
 chemrust-core = {git = "https://github.com/TonyWu20/chemrust", branch = "refactor"}
+nalgebra = "0.32"
+kiddo = "4.2"
