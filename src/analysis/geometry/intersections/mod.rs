@@ -2,14 +2,22 @@ mod circle_circle;
 mod plane_plane;
 mod sphere_sphere;
 
+use nalgebra::Point3;
 use std::f64::EPSILON;
 
-pub use sphere_sphere::{sphere_sphere_intersect, SphereSphereResult};
+pub use circle_circle::CircleCircleIntersection;
+pub use plane_plane::PlanePlaneIntersection;
+pub use sphere_sphere::SphereSphereResult;
 
 pub enum FloatOrdering {
     Less,
     Equal,
     Greater,
+}
+
+pub enum FloatEq {
+    NotEq,
+    Eq,
 }
 
 fn approx_cmp_f64(v1: f64, v2: f64) -> FloatOrdering {
@@ -20,4 +28,18 @@ fn approx_cmp_f64(v1: f64, v2: f64) -> FloatOrdering {
     } else {
         FloatOrdering::Equal
     }
+}
+
+fn approx_eq_point_f64(p1: Point3<f64>, p2: Point3<f64>) -> FloatEq {
+    let d = p1 - p2;
+    if d.x.abs() < EPSILON && d.y.abs() < EPSILON && d.z.abs() < EPSILON {
+        FloatEq::Eq
+    } else {
+        FloatEq::NotEq
+    }
+}
+
+pub trait Intersect<Rhs = Self> {
+    type Output;
+    fn intersect(&self, rhs: &Rhs) -> Self::Output;
 }
