@@ -2,6 +2,10 @@ use nalgebra::{Point3, UnitVector3, Vector3};
 
 #[derive(Debug, Clone, Copy)]
 /// n1*x + n2*y + n3*z + d = 0
+/// # Note
+/// The normal is a unit vector
+/// So if two planes have different d and cross product of two norms is a 0 vector,
+/// they must be parallel to each other.
 pub struct Plane {
     normal: UnitVector3<f64>,
     d: f64,
