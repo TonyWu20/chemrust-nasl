@@ -4,6 +4,8 @@ use nalgebra::{Point3, UnitVector3};
 
 use crate::analysis::geometry::primitives::{Circle3d, Sphere};
 
+use super::Intersect;
+
 #[derive(Debug)]
 /// Relationship between two spheres
 enum SphereSphereRelationship<'a> {
@@ -84,29 +86,39 @@ pub enum SphereSphereResult {
     Overlap(Sphere),
 }
 
-pub fn sphere_sphere_intersect(s1: &Sphere, s2: &Sphere) -> SphereSphereResult {
-    // S1->S2
-    let d = s2.center() - s1.center();
-    let sphere_intersect_cases = SphereSphereRelationship::determine(s1, s2);
-    match sphere_intersect_cases {
-        SphereSphereRelationship::Intersect => {
-            // d1 = d/2 + (r1^2 - r2^2)/2d
-            let d1 = 0.5 * d.norm() + 0.5 * (s1.radius().powi(2) - s2.radius().powi(2)) / d.norm();
-            // h^2 = r1^2 - d1^2 = (r1+d1)(r1-d1)
-            let h = ((s1.radius() + d1) * (s1.radius() - d1)).sqrt();
-            let norm = UnitVector3::new_normalize(d);
-            let center = s1.center() + norm.scale(d1);
-            let circle = Circle3d::new(center, h, norm);
-            SphereSphereResult::Circle(circle)
-        }
-        SphereSphereRelationship::OutsideCut => {
-            SphereSphereResult::Point(s1.point_at_surface(&UnitVector3::new_normalize(d)))
-        }
-        SphereSphereRelationship::TooFarAway => SphereSphereResult::Empty,
-        SphereSphereRelationship::Overlaps => SphereSphereResult::Overlap(*s1),
-        SphereSphereRelationship::InsideOutOfReach => SphereSphereResult::Empty,
-        SphereSphereRelationship::InsideCut(larger, direction) => {
-            SphereSphereResult::Point(larger.point_at_surface(&direction))
+impl SphereSphereResult {
+    /// Trivial math deduction
+    pub fn circle_result(s1: &Sphere, s2: &Sphere) -> Self {
+        let d = s2.center() - s1.center();
+        // d1 = d/2 + (r1^2 - r2^2)/2d
+        let d1 = 0.5 * d.norm() + 0.5 * (s1.radius().powi(2) - s2.radius().powi(2)) / d.norm();
+        // h^2 = r1^2 - d1^2 = (r1+d1)(r1-d1)
+        let h = ((s1.radius() + d1) * (s1.radius() - d1)).sqrt();
+        let norm = UnitVector3::new_normalize(d);
+        let center = s1.center() + norm.scale(d1);
+        let circle = Circle3d::new(center, h, norm);
+        SphereSphereResult::Circle(circle)
+    }
+}
+
+impl Intersect for Sphere {
+    type Output = SphereSphereResult;
+    fn intersect(&self, rhs: &Self) -> Self::Output {
+        let sphere_intersect_cases = SphereSphereRelationship::determine(self, rhs);
+        match sphere_intersect_cases {
+            SphereSphereRelationship::Intersect => SphereSphereResult::circle_result(self, rhs),
+            SphereSphereRelationship::OutsideCut => {
+                // direction d is from self pointing to rhs
+                let d = rhs.center() - self.center();
+                // get point from center of self and direction d
+                SphereSphereResult::Point(self.point_at_surface(&UnitVector3::new_normalize(d)))
+            }
+            SphereSphereRelationship::TooFarAway => SphereSphereResult::Empty,
+            SphereSphereRelationship::Overlaps => SphereSphereResult::Overlap(*self),
+            SphereSphereRelationship::InsideOutOfReach => SphereSphereResult::Empty,
+            SphereSphereRelationship::InsideCut(larger, direction) => {
+                SphereSphereResult::Point(larger.point_at_surface(&direction))
+            }
         }
     }
 }
@@ -119,7 +131,7 @@ mod test {
     use nalgebra::Point3;
 
     use crate::analysis::geometry::{
-        intersections::sphere_sphere::{sphere_sphere_intersect, SphereSphereRelationship},
+        intersections::{sphere_sphere::SphereSphereRelationship, Intersect},
         primitives::Sphere,
     };
 
@@ -135,11 +147,7 @@ mod test {
         let s8 = Sphere::new(Point3::new(2.0, 2.0, 2.0), 3.0);
         let pairs = [s2, s3, s4, s5, s6, s7, s8];
         pairs.iter().enumerate().for_each(|(id, s)| {
-            println!(
-                "\nCase {} result: {:?}",
-                id,
-                sphere_sphere_intersect(&s1, s)
-            );
+            println!("\nCase {} result: {:?}", id, s1.intersect(s));
             println!(
                 "Relationship: {:?}\n",
                 SphereSphereRelationship::determine(&s1, s)
