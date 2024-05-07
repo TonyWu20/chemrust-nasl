@@ -20,4 +20,10 @@ impl Line {
     pub fn point(&self, t: f64) -> Point3<f64> {
         self.origin + self.direction().scale(t)
     }
+
+    pub fn point_to_line_distance(&self, point: &Point3<f64>) -> f64 {
+        let l = point - self.origin();
+        let angle = l.angle(&self.direction());
+        l.norm() * angle.sin()
+    }
 }
