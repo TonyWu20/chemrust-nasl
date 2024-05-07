@@ -1,32 +1,27 @@
-use std::f64::EPSILON;
-
 use nalgebra::{Point3, UnitVector3};
 
 use crate::analysis::geometry::{
     intersections::{approx_cmp_f64, FloatOrdering},
-    primitives::Circle3d,
+    primitives::{Circle3d, Line},
 };
+
+use super::{approx_eq_point_f64, plane_plane::PlanePlaneIntersection, FloatEq, Intersect};
 
 #[derive(Debug, Clone, Copy)]
 enum CircleCircleRelationship {
     Coplanar,
     ParallelPlane,
-    NotParallel,
+    PlaneIntersect(Line),
 }
 
 impl CircleCircleRelationship {
     fn determine(c1: &Circle3d, c2: &Circle3d) -> Self {
-        let n3 = c1.n().cross(&c2.n());
-        if n3.norm_squared() < EPSILON {
-            let d = c1.center() - c2.center();
-            let d_dot_n1 = d.dot(&c1.n());
-            if d_dot_n1.abs() > EPSILON {
-                Self::ParallelPlane
-            } else {
-                Self::Coplanar
-            }
-        } else {
-            Self::NotParallel
+        let p1 = c1.plane_of_circle();
+        let p2 = c2.plane_of_circle();
+        match p1.intersect(&p2) {
+            PlanePlaneIntersection::Same => Self::Coplanar,
+            PlanePlaneIntersection::Parallel => Self::ParallelPlane,
+            PlanePlaneIntersection::Intersect(line) => Self::PlaneIntersect(line),
         }
     }
 }
@@ -38,19 +33,117 @@ pub enum CircleCircleIntersection {
     Double(Point3<f64>, Point3<f64>),
 }
 
-impl CircleCircleIntersection {
-    pub fn intersect_result(c1: &Circle3d, c2: &Circle3d) -> Self {
-        let case = CircleCircleRelationship::determine(c1, c2);
+#[derive(Debug, Clone, Copy)]
+pub struct CircleCoplanarLine(Line);
+
+#[derive(Debug, Clone, Copy)]
+pub enum CircleLineIntersection {
+    Empty,
+    Single(Point3<f64>),
+    Double(Point3<f64>, Point3<f64>),
+}
+
+impl Intersect for Circle3d {
+    type Output = CircleCircleIntersection;
+
+    fn intersect(&self, rhs: &Self) -> Self::Output {
+        let case = CircleCircleRelationship::determine(self, rhs);
         match case {
             CircleCircleRelationship::ParallelPlane => CircleCircleIntersection::Empty,
-            CircleCircleRelationship::Coplanar => coplanar_circle_circle_intersect(c1, c2),
-            CircleCircleRelationship::NotParallel => noncoplanar_circle_circle_intersect(c1, c2),
+            CircleCircleRelationship::Coplanar => coplanar_circle_circle_intersect(self, rhs),
+            CircleCircleRelationship::PlaneIntersect(line) => {
+                noncoplanar_circle_circle_intersect(self, rhs, &line)
+            }
         }
     }
 }
 
-fn noncoplanar_circle_circle_intersect(c1: &Circle3d, c2: &Circle3d) -> CircleCircleIntersection {
-    todo!()
+impl Intersect<CircleCoplanarLine> for Circle3d {
+    type Output = CircleLineIntersection;
+
+    fn intersect(&self, rhs: &CircleCoplanarLine) -> Self::Output {
+        let line = rhs.0;
+        let distance_to_line = line.point_to_line_distance(&self.center());
+        match approx_cmp_f64(distance_to_line, self.radius()) {
+            FloatOrdering::Less => {
+                let line_origin_to_p = self.center() - line.origin();
+                let angle = line.direction().angle(&line_origin_to_p);
+                let h = (self.radius().powi(2) - distance_to_line.powi(2)).sqrt();
+                let t1 = line_origin_to_p.norm() * angle.cos() + h;
+                let t2 = line_origin_to_p.norm() * angle.cos() - h;
+                let p1 = line.point(t1);
+                let p2 = line.point(t2);
+                CircleLineIntersection::Double(p1, p2)
+            }
+            FloatOrdering::Equal => CircleLineIntersection::Single(line.origin()),
+            FloatOrdering::Greater => CircleLineIntersection::Empty,
+        }
+    }
+}
+
+fn noncoplanar_circle_circle_intersect(
+    c1: &Circle3d,
+    c2: &Circle3d,
+    intersect_line: &Line,
+) -> CircleCircleIntersection {
+    let coplanar_line = CircleCoplanarLine(*intersect_line);
+    let c1_line_result: CircleLineIntersection = c1.intersect(&coplanar_line);
+    let c2_line_result: CircleLineIntersection = c2.intersect(&coplanar_line);
+    match (c1_line_result, c2_line_result) {
+        (CircleLineIntersection::Empty, _) => CircleCircleIntersection::Empty,
+        (_, CircleLineIntersection::Empty) => CircleCircleIntersection::Empty,
+        (CircleLineIntersection::Single(p1), CircleLineIntersection::Single(p2)) => {
+            match approx_eq_point_f64(p1, p2) {
+                FloatEq::Eq => CircleCircleIntersection::Single(p1),
+                FloatEq::NotEq => CircleCircleIntersection::Empty,
+            }
+        }
+        (CircleLineIntersection::Single(p1), CircleLineIntersection::Double(p2, p3)) => {
+            if let FloatEq::Eq = approx_eq_point_f64(p1, p2) {
+                CircleCircleIntersection::Single(p1)
+            } else if let FloatEq::Eq = approx_eq_point_f64(p1, p3) {
+                CircleCircleIntersection::Single(p1)
+            } else {
+                CircleCircleIntersection::Empty
+            }
+        }
+        (CircleLineIntersection::Double(p2, p3), CircleLineIntersection::Single(p1)) => {
+            if let FloatEq::Eq = approx_eq_point_f64(p1, p2) {
+                CircleCircleIntersection::Single(p1)
+            } else if let FloatEq::Eq = approx_eq_point_f64(p1, p3) {
+                CircleCircleIntersection::Single(p1)
+            } else {
+                CircleCircleIntersection::Empty
+            }
+        }
+        (CircleLineIntersection::Double(p1, p2), CircleLineIntersection::Double(p3, p4)) => {
+            // Full cases discussion
+            let case_1 = (approx_eq_point_f64(p1, p3), approx_eq_point_f64(p2, p4));
+            // If the corresponding relationship is the other way.
+            match case_1 {
+                // p1 != p3, p2 == p4, then p2
+                (FloatEq::NotEq, FloatEq::Eq) => CircleCircleIntersection::Single(p2),
+                // p1 == p3, p2 != p4, then p1
+                (FloatEq::Eq, FloatEq::NotEq) => CircleCircleIntersection::Single(p1),
+                // p1 == p3 && p2 == p4, double
+                (FloatEq::Eq, FloatEq::Eq) => CircleCircleIntersection::Double(p1, p2),
+                // p1 != p3 && p2 != p4, could be mismatch, further discuss as case_2
+                (FloatEq::NotEq, FloatEq::NotEq) => {
+                    // Not inline for tidyness in reading
+                    let case_2 = (approx_eq_point_f64(p1, p4), approx_eq_point_f64(p2, p3));
+                    match case_2 {
+                        // Like above 3 cases
+                        (FloatEq::NotEq, FloatEq::Eq) => CircleCircleIntersection::Single(p2),
+                        (FloatEq::Eq, FloatEq::NotEq) => CircleCircleIntersection::Single(p1),
+                        (FloatEq::Eq, FloatEq::Eq) => CircleCircleIntersection::Double(p1, p2),
+                        // (p1 != p3 && p2 != p4) && (p1 != p4 && p2 != p3),
+                        // they don't have common points for sure now
+                        (FloatEq::NotEq, FloatEq::NotEq) => CircleCircleIntersection::Empty,
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Returns (larger, smaller)
@@ -62,6 +155,7 @@ fn cmp_radius_circle<'a>(c1: &'a Circle3d, c2: &'a Circle3d) -> (&'a Circle3d, &
     }
 }
 
+/// Trivial math deduction
 fn coplanar_circle_circle_intersect(c1: &Circle3d, c2: &Circle3d) -> CircleCircleIntersection {
     let c1c2 = c2.center() - c1.center();
     let c1c2_norm_squared = c1c2.norm_squared();
@@ -100,5 +194,29 @@ fn coplanar_circle_circle_intersect(c1: &Circle3d, c2: &Circle3d) -> CircleCircl
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+/// Todo: write tests to cover all possible cases of circle-circle intersection
+mod test {
+    use nalgebra::{Point3, UnitVector3, Vector3};
+
+    use crate::analysis::geometry::{intersections::Intersect, primitives::Circle3d};
+
+    #[test]
+    fn circle_circle() {
+        let c1 = Circle3d::new(
+            Point3::new(0.5833333333333333, 0.5833333333333333, 0.5833333333333333),
+            1.726026264767,
+            UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)),
+        );
+        let c2 = Circle3d::new(
+            Point3::new(0.5, 0.5, 0.0),
+            1.8708286933869707,
+            UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 0.0)),
+        );
+        let res = c1.intersect(&c2);
+        println!("{:?}", res);
     }
 }
