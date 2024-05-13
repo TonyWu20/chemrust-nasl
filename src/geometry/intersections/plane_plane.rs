@@ -2,7 +2,7 @@ use std::f64::EPSILON;
 
 use nalgebra::{Point3, UnitVector3};
 
-use crate::analysis::geometry::primitives::{Line, Plane};
+use crate::geometry::primitives::{Line, Plane};
 
 use super::{approx_cmp_f64, FloatOrdering, Intersect};
 
@@ -45,7 +45,7 @@ mod test {
 
     use nalgebra::{Point3, UnitVector3, Vector3};
 
-    use crate::analysis::geometry::{
+    use crate::geometry::{
         intersections::{plane_plane::PlanePlaneIntersection, Intersect},
         primitives::{Circle3d, Plane},
     };

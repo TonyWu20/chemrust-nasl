@@ -2,7 +2,7 @@ use std::f64::EPSILON;
 
 use nalgebra::{Point3, UnitVector3};
 
-use crate::analysis::geometry::primitives::{Circle3d, Sphere};
+use crate::geometry::primitives::{Circle3d, Sphere};
 
 use super::Intersect;
 
@@ -27,9 +27,9 @@ impl<'a> SphereSphereRelationship<'a> {
     /// returns (larger, smaller)
     /// if the two spheres are considered to be identical, returns the first as the larger
     fn cmp_sphere(s1: &'a Sphere, s2: &'a Sphere) -> (&'a Sphere, &'a Sphere) {
-        if s1.radius() - s2.radius() > EPSILON {
+        if s1.radius() - s2.radius() > 5.0 * EPSILON {
             (s1, s2)
-        } else if s1.radius() - s2.radius() < -1.0 * EPSILON {
+        } else if s1.radius() - s2.radius() < -5.0 * EPSILON {
             (s2, s1)
         } else {
             (s1, s2)
@@ -45,29 +45,29 @@ impl<'a> SphereSphereRelationship<'a> {
         let smaller_r = f64::min(s1.radius(), s2.radius());
         // edge cases
         // 1. two spheres too far away (r1 + r2) < d
-        if d_norm2 - r1_plus_r2_2 > EPSILON {
+        if d_norm2 - r1_plus_r2_2 > 5.0 * EPSILON {
             Self::TooFarAway
         }
         // 2. one sphere is inside another, and the inner one
         // doesn't touch the outer.
         // d + r_small < r_large
-        else if d_norm2 - (larger_r - smaller_r).powi(2) < -1.0 * EPSILON {
+        else if d_norm2 - (larger_r - smaller_r).powi(2) < -5.0 * EPSILON {
             Self::InsideOutOfReach
         }
         // 3. Two spheres touch from outside
         // d = r1 + r2
         // Take the floating point inaccracy in account
-        else if (d_norm2 - r1_plus_r2_2).abs() < EPSILON {
+        else if (d_norm2 - r1_plus_r2_2).abs() < EPSILON * 5.0 {
             Self::OutsideCut
         }
         // 4. Overlaps
         // d = 0, r1-r2 = 0
-        else if d_norm2 < EPSILON && r1_diff_r2_2 < EPSILON {
+        else if d_norm2 < EPSILON && r1_diff_r2_2 < EPSILON * 5.0 {
             Self::Overlaps
         }
         // 5. One touches the outer from inside
         // d + r_small = r_large
-        else if (d_norm2 - r1_diff_r2_2).abs() < EPSILON {
+        else if (d_norm2 - r1_diff_r2_2).abs() < EPSILON * 5.0 {
             let (larger, smaller) = Self::cmp_sphere(s1, s2);
             let direction = UnitVector3::new_normalize(smaller.center() - larger.center());
             Self::InsideCut(larger, direction)
@@ -130,7 +130,7 @@ mod test {
 
     use nalgebra::Point3;
 
-    use crate::analysis::geometry::{
+    use crate::geometry::{
         intersections::{sphere_sphere::SphereSphereRelationship, Intersect},
         primitives::Sphere,
     };

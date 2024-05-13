@@ -1,3 +1,3 @@
 #![allow(dead_code)]
-mod analysis;
-
+mod algorithm;
+mod geometry;
