@@ -28,18 +28,15 @@ impl Intersect<Sphere> for Circle3d {
         // radius, the intersection plane is above or below the sphere. No
         // intersection.
         if let FloatOrdering::Greater = approx_cmp_f64(cut_at.abs(), rhs.radius()) {
-            dbg!("No intersection");
             CircleSphereIntersection::Zero
         }
         // Cut at the pole of the sphere
         else if let FloatOrdering::Equal = approx_cmp_f64(cut_at.abs(), rhs.radius()) {
-            dbg!("Pole");
             let p = rhs.center() + self.n().scale(cut_at);
             CircleSphereIntersection::Single(p)
         }
         // Turn to coplanar circle circle intersection problem.
         else {
-            dbg!("Coplanar circles");
             let new_circle_center = rhs.center() + self.n().scale(cut_at);
             // new circle radius <= Sphere radius
             let new_circle_radius = (rhs.radius().powi(2) - cut_at.powi(2)).sqrt();

@@ -16,3 +16,8 @@ keywords = ["chemistry", "chemistry_research", "catalysis_research", "geometry"]
 chemrust-core = {git = "https://github.com/TonyWu20/chemrust", branch = "refactor"}
 nalgebra = "0.32"
 kiddo = "4.2"
+castep-periodic-table = "0.4"
+
+[dev-dependencies]
+castep-cell-io = {git = "https://github.com/TonyWu20/castep-cell-io.git", branch = "dev"}
+castep-periodic-table = "0.4"
