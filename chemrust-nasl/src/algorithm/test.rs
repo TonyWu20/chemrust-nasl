@@ -6,7 +6,10 @@ use castep_periodic_table::element::ElementSymbol;
 use chemrust_core::data::{
     atom::{Atoms, CoreAtomData},
     geom::coordinates::CoordData,
-    lattice::{cell_param::LatticeVectors, CrystalModel, LatticeCell},
+    lattice::{
+        cell_param::{LatticeVectors, UnitCellParameters},
+        CrystalModel, LatticeCell,
+    },
 };
 use nalgebra::{Matrix3, Point3};
 
@@ -95,18 +98,28 @@ fn test_search() {
             let atom = coord_circle.draw_with_element(&ElementSymbol::Pt);
             let coordinate = lattice_vec.tensor().try_inverse().unwrap() * atom.coord().xyz();
             let new_point = IonicPosition::new(ElementSymbol::Pt, coordinate.into(), None);
-            let mut new_positions = cell_model.ionic_positions().positions().to_vec();
-            new_positions.push(new_point);
-            let new_positions_block = IonicPositionBlock::new(
-                cell_model.ionic_positions().unit(),
-                new_positions,
-                cell_model.ionic_positions().keyword(),
-                cell_model.ionic_positions().spin_polarised(),
-            );
-            let new_model = CellDocument::new(lattice_param_block, new_positions_block);
+            let mut new_model = cell_model.clone();
+            new_model
+                .ionic_positions_mut()
+                .positions_mut()
+                .push(new_point);
             let filename = format!("demo/double/SAC_GDY_V_Pt_{dist}_{}.cell", atom_ids_text);
             new_model.write_out(filename).expect("Write out error")
         });
+        let mut new_model = cell_model.clone();
+        results
+            .circles
+            .iter()
+            .map(|coord_circle| {
+                let atom = coord_circle.draw_with_element(&ElementSymbol::Pt);
+                let coordinate =
+                    lattice_vec.cell_tensor().try_inverse().unwrap() * atom.coord().xyz();
+                IonicPosition::new(ElementSymbol::Pt, coordinate.into(), None)
+            })
+            .for_each(|pos| new_model.ionic_positions_mut().positions_mut().push(pos));
+        new_model
+            .write_out("demo/double/SAC_GDY_V_Pt_all_double_demo.cell")
+            .expect("Write out error");
         results.points.iter().for_each(|coord_point| {
             let atom_ids_text = coord_point
                 .atom_ids
@@ -116,17 +129,37 @@ fn test_search() {
                 .join("_");
             let coordinate = lattice_vec.tensor().try_inverse().unwrap() * coord_point.point;
             let new_point = IonicPosition::new(ElementSymbol::Pt, coordinate.into(), None);
-            let mut new_positions = cell_model.ionic_positions().positions().to_vec();
-            new_positions.push(new_point);
-            let new_positions_block = IonicPositionBlock::new(
-                cell_model.ionic_positions().unit(),
-                new_positions,
-                cell_model.ionic_positions().keyword(),
-                cell_model.ionic_positions().spin_polarised(),
+            let mut new_model = cell_model.clone();
+            new_model
+                .ionic_positions_mut()
+                .positions_mut()
+                .push(new_point);
+            let filename = format!(
+                "demo/multi/SAC_GDY_V_Pt_cn_{}_{}.cell",
+                coord_point.atom_ids.len(),
+                atom_ids_text
             );
-            let new_model = CellDocument::new(lattice_param_block, new_positions_block);
-            let filename = format!("demo/multi/SAC_GDY_V_Pt_{dist}_{}.cell", atom_ids_text);
             new_model.write_out(filename).expect("Write out error")
-        })
+        });
+        let mut new_model = cell_model.clone();
+        results
+            .points
+            .iter()
+            .map(|coord_point| {
+                let coordinate = lattice_vec.tensor().try_inverse().unwrap() * coord_point.point;
+                let symbol = match coord_point.atom_ids.len() {
+                    3 => ElementSymbol::Cu,
+                    4 => ElementSymbol::Fe,
+                    5 => ElementSymbol::W,
+                    6 => ElementSymbol::Pt,
+                    _ => ElementSymbol::Na,
+                };
+                IonicPosition::new(symbol, coordinate.into(), None)
+            })
+            .for_each(|pos| {
+                new_model.ionic_positions_mut().positions_mut().push(pos);
+            });
+        let filename = "demo/multi/SAC_GDY_V_Pt_all_multi_demo.cell".to_string();
+        new_model.write_out(filename).expect("Write out error");
     }
 }

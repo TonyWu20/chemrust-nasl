@@ -37,7 +37,7 @@ pub fn approx_eq_point_f64(p1: Point3<f64>, p2: Point3<f64>) -> FloatEq {
     let d = p1 - p2;
     // Δx, Δy, Δz < ϵ
     // (Δx^2 + Δy^2 + Δz^2 < 3ϵ^2)
-    if d.norm_squared() < 3.0 * (1.0e-7_f64).powi(2) {
+    if d.norm_squared() < 3.0 * (1.0e-6_f64).powi(2) {
         FloatEq::Eq
     } else {
         FloatEq::NotEq
