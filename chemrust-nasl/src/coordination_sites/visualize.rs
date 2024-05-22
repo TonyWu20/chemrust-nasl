@@ -1,12 +1,16 @@
 use castep_periodic_table::element::ElementSymbol;
 use chemrust_core::data::geom::coordinates::CoordData;
-use nalgebra::{UnitVector3, Vector3};
+use nalgebra::{Matrix3, Point3, UnitVector3, Vector3};
 
 use super::{CoordCircle, CoordPoint, CoordSphere};
 
 pub trait Visualize {
     type Output;
-    fn draw_with_element(&self, element_symbol: &ElementSymbol) -> Self::Output;
+    fn determine_coord(&self) -> Point3<f64>;
+    fn draw_with_element(&self, element_symbol: ElementSymbol) -> Self::Output;
+    fn fractional_coord(&self, cell_tensor: Matrix3<f64>) -> Point3<f64> {
+        cell_tensor.try_inverse().expect("Matrix is not invertible") * self.determine_coord()
+    }
 }
 
 pub struct Atom {
@@ -31,18 +35,26 @@ impl Atom {
 impl Visualize for CoordSphere {
     type Output = Atom;
 
-    fn draw_with_element(&self, element_symbol: &ElementSymbol) -> Self::Output {
+    fn draw_with_element(&self, element_symbol: ElementSymbol) -> Self::Output {
+        let coord = CoordData::Cartesian(self.determine_coord());
+        Atom::new(element_symbol, coord)
+    }
+
+    fn determine_coord(&self) -> Point3<f64> {
         let center = self.sphere.center();
         let z_shift = Vector3::z_axis().scale(self.sphere.radius());
-        let coord = CoordData::Cartesian(center + z_shift);
-        Atom::new(*element_symbol, coord)
+        center + z_shift
     }
 }
 
 impl Visualize for CoordCircle {
     type Output = Atom;
 
-    fn draw_with_element(&self, element_symbol: &ElementSymbol) -> Self::Output {
+    fn draw_with_element(&self, element_symbol: ElementSymbol) -> Self::Output {
+        Atom::new(element_symbol, CoordData::Cartesian(self.determine_coord()))
+    }
+
+    fn determine_coord(&self) -> Point3<f64> {
         let (x, y, _z) = (self.circle.n().x, self.circle.n().y, self.circle.n().z);
         // We want the v2 to act as the "z-axis" after transformation
         let pre_v1 = Vector3::new(-1.0 * y, x, 0.0);
@@ -53,15 +65,18 @@ impl Visualize for CoordCircle {
             UnitVector3::new_normalize(pre_v1)
         };
         let v2 = self.circle.n().cross(&v1);
-        let p = self.circle.center() + (v1.scale(0.0) + v2.scale(1.0)).scale(self.circle.radius());
-        Atom::new(*element_symbol, CoordData::Cartesian(p))
+        self.circle.center() + (v1.scale(0.0) + v2.scale(1.0)).scale(self.circle.radius())
     }
 }
 
 impl Visualize for CoordPoint {
     type Output = Atom;
 
-    fn draw_with_element(&self, element_symbol: &ElementSymbol) -> Self::Output {
-        Atom::new(*element_symbol, CoordData::Cartesian(self.point))
+    fn draw_with_element(&self, element_symbol: ElementSymbol) -> Self::Output {
+        Atom::new(element_symbol, CoordData::Cartesian(self.determine_coord()))
+    }
+
+    fn determine_coord(&self) -> Point3<f64> {
+        self.point
     }
 }

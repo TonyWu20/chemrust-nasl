@@ -7,6 +7,12 @@ authors = ["TonyWu20"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-castep-cell-io = "0.1.2"
+castep-cell-io = "0.1.4"
 castep-periodic-table = "0.4"
 chemrust-nasl = {path = "../chemrust-nasl"}
+clap = {version = "4", features = ["derive"]}
+inquire = "0.7.5"
+serde_yaml = "0.9.34"
+serde = {version = "1.0", features = ["derive"]}
+chemrust-core = {git = "https://github.com/TonyWu20/chemrust", branch = "refactor"}
+nalgebra = "0.32"

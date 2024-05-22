@@ -1,6 +1,6 @@
 use std::{fs::read_to_string, path::Path};
 
-use castep_cell_io::{CellDocument, CellParser, IonicPosition, IonicPositionBlock, LatticeParam};
+use castep_cell_io::{CellDocument, CellParser, IonicPosition, LatticeParam};
 
 use castep_periodic_table::element::ElementSymbol;
 use chemrust_core::data::{
@@ -95,7 +95,7 @@ fn test_search() {
                 .map(|id| id.to_string())
                 .collect::<Vec<String>>()
                 .join("_");
-            let atom = coord_circle.draw_with_element(&ElementSymbol::Pt);
+            let atom = coord_circle.draw_with_element(ElementSymbol::Pt);
             let coordinate = lattice_vec.tensor().try_inverse().unwrap() * atom.coord().xyz();
             let new_point = IonicPosition::new(ElementSymbol::Pt, coordinate.into(), None);
             let mut new_model = cell_model.clone();
@@ -111,7 +111,7 @@ fn test_search() {
             .circles
             .iter()
             .map(|coord_circle| {
-                let atom = coord_circle.draw_with_element(&ElementSymbol::Pt);
+                let atom = coord_circle.draw_with_element(ElementSymbol::Pt);
                 let coordinate =
                     lattice_vec.cell_tensor().try_inverse().unwrap() * atom.coord().xyz();
                 IonicPosition::new(ElementSymbol::Pt, coordinate.into(), None)

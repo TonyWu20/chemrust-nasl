@@ -20,4 +20,3 @@ castep-periodic-table = "0.4"
 
 [dev-dependencies]
 castep-cell-io = {git = "https://github.com/TonyWu20/castep-cell-io.git", branch = "dev"}
-castep-periodic-table = "0.4"

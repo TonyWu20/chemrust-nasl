@@ -70,6 +70,18 @@ impl SearchResults {
             points,
         }
     }
+
+    pub fn spheres(&self) -> &[CoordSphere] {
+        self.spheres.as_ref()
+    }
+
+    pub fn circles(&self) -> &[CoordCircle] {
+        self.circles.as_ref()
+    }
+
+    pub fn points(&self) -> &[CoordPoint] {
+        self.points.as_ref()
+    }
 }
 
 pub fn search_sites(site_index: &SiteIndex, search_config: &SearchConfig) -> SearchResults {

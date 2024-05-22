@@ -17,3 +17,8 @@ Cargo.lock
 # Added by cargo
 
 /target
+
+# Tests
+scanner_test_models/
+test_configs/
+
