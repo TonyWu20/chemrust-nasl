@@ -21,4 +21,5 @@ Cargo.lock
 # Tests
 scanner_test_models/
 test_configs/
+demo/
 
