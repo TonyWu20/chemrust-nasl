@@ -1,9 +1,13 @@
-use kiddo::ImmutableKdTree;
+use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use nalgebra::Point3;
 
 use self::{circle_check::check_circles, sphere_check::sphere_check};
 
-use crate::coordination_sites::{CoordCircle, CoordPoint, CoordSphere};
+use crate::{
+    coordination_sites::{CoordCircle, CoordPoint, CoordSphere},
+    geometry::{approx_cmp_f64, FloatOrdering},
+    Visualize,
+};
 
 mod circle_check;
 mod sphere_check;
@@ -52,13 +56,19 @@ impl SiteIndex {
 }
 
 #[derive(Debug)]
-pub struct SearchResults {
+pub struct SearchReports {
     spheres: Vec<CoordSphere>,
     circles: Vec<CoordCircle>,
     points: Vec<CoordPoint>,
 }
 
-impl SearchResults {
+#[derive(Debug)]
+pub enum SearchResults {
+    Found(SearchReports),
+    Empty,
+}
+
+impl SearchReports {
     pub fn new(
         spheres: Vec<CoordSphere>,
         circles: Vec<CoordCircle>,
@@ -82,6 +92,17 @@ impl SearchResults {
     pub fn points(&self) -> &[CoordPoint] {
         self.points.as_ref()
     }
+    pub fn validated_results<T: Visualize + Clone>(
+        coord_sites: &[T],
+        site_index: &SiteIndex,
+        search_config: &SearchConfig,
+    ) -> Vec<T> {
+        coord_sites
+            .iter()
+            .filter_map(|coord_site| validate_site(coord_site, site_index, search_config))
+            .cloned()
+            .collect()
+    }
 }
 
 pub fn search_sites(site_index: &SiteIndex, search_config: &SearchConfig) -> SearchResults {
@@ -99,9 +120,36 @@ pub fn search_sites(site_index: &SiteIndex, search_config: &SearchConfig) -> Sea
     .concat();
     let dedup_points =
         CoordPoint::dedup_points(&points, site_index.coord_tree(), search_config.bondlength);
-    SearchResults::new(
-        sphere_intersect_results.spheres().to_vec(),
-        pure_circles.to_vec(),
-        dedup_points,
-    )
+    if sphere_intersect_results.spheres().is_empty()
+        && pure_circles.is_empty()
+        && dedup_points.is_empty()
+    {
+        SearchResults::Empty
+    } else {
+        SearchResults::Found(SearchReports::new(
+            sphere_intersect_results.spheres().to_vec(),
+            pure_circles.to_vec(),
+            dedup_points,
+        ))
+    }
+}
+
+pub fn validate_site<'a, 'b, T: Visualize>(
+    coord_site: &'a T,
+    site_index: &'b SiteIndex,
+    search_config: &'b SearchConfig,
+) -> Option<&'a T> {
+    let coord = coord_site.determine_coord();
+    let bondlength = search_config.bondlength;
+    let dist = bondlength.powi(2);
+    if site_index
+        .coord_tree
+        .within::<SquaredEuclidean>(&coord.into(), dist)
+        .iter()
+        .any(|nb| matches!(approx_cmp_f64(nb.distance, dist), FloatOrdering::Less))
+    {
+        None
+    } else {
+        Some(coord_site)
+    }
 }

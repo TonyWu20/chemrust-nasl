@@ -28,6 +28,7 @@ impl CircleCircleRelationship {
 
 #[derive(Debug, Clone, Copy)]
 pub enum CircleCircleIntersection {
+    Invalid,
     Empty,
     Single(Point3<f64>),
     Double(Point3<f64>, Point3<f64>),
@@ -165,55 +166,76 @@ pub(crate) fn coplanar_circle_circle_intersect(
 ) -> CircleCircleIntersection {
     let c1c2 = c2.center() - c1.center();
     let c1c2_norm_squared = c1c2.norm_squared();
-    // When the two circles have identical centers
-    if let FloatOrdering::Equal = approx_cmp_f64(c1c2_norm_squared, 0.0) {
-        match approx_cmp_f64(c1.radius(), c2.radius()) {
-            FloatOrdering::Equal => CircleCircleIntersection::Overlap(*c1),
-            FloatOrdering::Less => CircleCircleIntersection::Contains(*c1, *c2),
-            FloatOrdering::Greater => CircleCircleIntersection::Contains(*c2, *c1),
-        }
-    }
+    // // When the two circles have identical centers
+    // if let FloatOrdering::Equal = approx_cmp_f64(c1c2_norm_squared, 0.0) {
+    //     match approx_cmp_f64(c1.radius(), c2.radius()) {
+    //         FloatOrdering::Equal => CircleCircleIntersection::Overlap(*c1),
+    //         FloatOrdering::Less => CircleCircleIntersection::Contains(*c1, *c2),
+    //         FloatOrdering::Greater => CircleCircleIntersection::Contains(*c2, *c1),
+    //     }
+    // }
     // The two circles' centers are separated
-    else {
-        let r1r2_sum_squared = (c1.radius() + c2.radius()).powi(2);
-        match approx_cmp_f64(c1c2_norm_squared, r1r2_sum_squared) {
-            FloatOrdering::Equal => {
-                let direction = UnitVector3::new_normalize(c1c2);
-                let p = c1.center() + direction.scale(c1.radius());
-                CircleCircleIntersection::Single(p)
-            }
-            FloatOrdering::Greater => CircleCircleIntersection::Empty,
-            FloatOrdering::Less => {
-                let r1r2_diff_squared = (c1.radius() - c2.radius()).powi(2);
-                match approx_cmp_f64(c1c2_norm_squared, r1r2_diff_squared) {
-                    FloatOrdering::Less => CircleCircleIntersection::Empty,
-                    FloatOrdering::Equal => {
+    // else {
+    let r1r2_sum_squared = (c1.radius() + c2.radius()).powi(2);
+    match approx_cmp_f64(c1c2_norm_squared, r1r2_sum_squared) {
+        // d = r1+r2, outer cut
+        FloatOrdering::Equal => {
+            let direction = UnitVector3::new_normalize(c1c2);
+            let p = c1.center() + direction.scale(c1.radius());
+            CircleCircleIntersection::Single(p)
+        }
+        // d > r1+r2, out of reach
+        FloatOrdering::Greater => CircleCircleIntersection::Empty,
+        // d < r1+r2, possibly intersect, then
+        FloatOrdering::Less => {
+            // r1-r2
+            let r1r2_diff_squared = (c1.radius() - c2.radius()).powi(2);
+            match approx_cmp_f64(c1c2_norm_squared, r1r2_diff_squared) {
+                // d< r1+r2, d <r1-r2, One contains another
+                FloatOrdering::Less => {
+                    match approx_cmp_f64(c1.radius(), c2.radius()) {
+                        // Since 0 <= c1c2_norm_squared, 0 <= r1r2_diff_squared
+                        // and c1c2_norm_squared < r1r2_diffi-squared
+                        // if r1 = r2, then this is not possible
+                        FloatOrdering::Equal => CircleCircleIntersection::Invalid,
+                        FloatOrdering::Less => CircleCircleIntersection::Contains(*c1, *c2),
+                        FloatOrdering::Greater => CircleCircleIntersection::Contains(*c2, *c1),
+                    }
+                }
+                // d < r1+r2, d = r1-r2, inner cut
+                // edge case: 0 = d = r1-r2, overlap
+                FloatOrdering::Equal => {
+                    if let FloatOrdering::Equal = approx_cmp_f64(r1r2_diff_squared, 0.0) {
+                        CircleCircleIntersection::Overlap(*c1)
+                    } else {
                         let (larger_c, smaller_c) = cmp_radius_circle(c1, c2);
                         let direction =
                             UnitVector3::new_normalize(smaller_c.center() - larger_c.center());
                         let p = larger_c.center() + direction.scale(larger_c.radius());
                         CircleCircleIntersection::Single(p)
                     }
-                    FloatOrdering::Greater => {
-                        let c1c2_normalized = UnitVector3::new_normalize(c1c2);
-                        let c1c2_perpendicular =
-                            UnitVector3::new_normalize(c1.n().cross(&c1c2_normalized));
-                        // q = d^2 + r_1^2 - r_2^2
-                        // let c1c2_norm = c1c2.norm();
-                        let h = (c1c2_norm_squared + c1.radius().powi(2) - c2.radius().powi(2))
-                            / (2.0 * c1c2.norm());
-                        // let dy = (4.0 * c1c2_norm_squared * c1.radius().powi(2) - q).sqrt()
-                        //     / (2.0 * c1c2_norm);
-                        let dy = (c1.radius().powi(2) - h.powi(2)).sqrt();
-                        let p_dx = c1.center() + c1c2_normalized.scale(h);
-                        let p1 = p_dx + c1c2_perpendicular.scale(dy);
-                        let p2 = p_dx - c1c2_perpendicular.scale(dy);
-                        CircleCircleIntersection::Double(p1, p2)
-                    }
+                }
+                // r1-r2 < d < r1+r2, normal intersects
+                FloatOrdering::Greater => {
+                    let c1c2_normalized = UnitVector3::new_normalize(c1c2);
+                    let c1c2_perpendicular =
+                        UnitVector3::new_normalize(c1.n().cross(&c1c2_normalized));
+                    // q = d^2 + r_1^2 - r_2^2
+                    // let c1c2_norm = c1c2.norm();
+                    let h = (c1c2_norm_squared + c1.radius().powi(2) - c2.radius().powi(2))
+                        / (2.0 * c1c2.norm());
+                    // let dy = (4.0 * c1c2_norm_squared * c1.radius().powi(2) - q).sqrt()
+                    //     / (2.0 * c1c2_norm);
+                    let dy = (c1.radius().powi(2) - h.powi(2)).sqrt();
+                    let p_dx = c1.center() + c1c2_normalized.scale(h);
+                    let p1 = p_dx + c1c2_perpendicular.scale(dy);
+                    let p2 = p_dx - c1c2_perpendicular.scale(dy);
+                    CircleCircleIntersection::Double(p1, p2)
                 }
             }
         }
     }
+    // }
 }
 
 #[cfg(test)]

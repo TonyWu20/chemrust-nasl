@@ -7,6 +7,7 @@ use super::{CoordCircle, CoordPoint, CoordSphere};
 pub trait Visualize {
     type Output;
     fn determine_coord(&self) -> Point3<f64>;
+    fn element_by_cn_number(&self) -> ElementSymbol;
     fn draw_with_element(&self, element_symbol: ElementSymbol) -> Self::Output;
     fn fractional_coord(&self, cell_tensor: Matrix3<f64>) -> Point3<f64> {
         cell_tensor.try_inverse().expect("Matrix is not invertible") * self.determine_coord()
@@ -45,6 +46,10 @@ impl Visualize for CoordSphere {
         let z_shift = Vector3::z_axis().scale(self.sphere.radius());
         center + z_shift
     }
+
+    fn element_by_cn_number(&self) -> ElementSymbol {
+        ElementSymbol::Xe
+    }
 }
 
 impl Visualize for CoordCircle {
@@ -67,6 +72,10 @@ impl Visualize for CoordCircle {
         let v2 = self.circle.n().cross(&v1);
         self.circle.center() + (v1.scale(0.0) + v2.scale(1.0)).scale(self.circle.radius())
     }
+
+    fn element_by_cn_number(&self) -> ElementSymbol {
+        ElementSymbol::Ne
+    }
 }
 
 impl Visualize for CoordPoint {
@@ -78,5 +87,13 @@ impl Visualize for CoordPoint {
 
     fn determine_coord(&self) -> Point3<f64> {
         self.point
+    }
+
+    fn element_by_cn_number(&self) -> ElementSymbol {
+        if self.atom_ids().len() < 104 {
+            ElementSymbol::try_from(self.atom_ids().len() as u8).unwrap_or(ElementSymbol::W)
+        } else {
+            ElementSymbol::Np
+        }
     }
 }

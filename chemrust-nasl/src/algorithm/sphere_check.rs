@@ -60,7 +60,7 @@ pub fn sphere_check(site_index: &SiteIndex, search_config: &SearchConfig) -> Sph
                     .coord_tree
                     .within::<SquaredEuclidean>(&query, 4.0 * dist.powi(2));
                 if sphere_neighbours.len() == 1 {
-                    CoordResult::Sphere(CoordSphere::new(sphere, atom_id))
+                    CoordResult::Empty
                 } else {
                     let sphere_neighbor_results: Vec<CoordResult> = sphere_neighbours
                         .iter()
@@ -92,14 +92,7 @@ pub fn sphere_check(site_index: &SiteIndex, search_config: &SearchConfig) -> Sph
                             }
                         })
                         .collect();
-                    if sphere_neighbor_results
-                        .iter()
-                        .all(|res| matches!(res, CoordResult::Empty))
-                    {
-                        CoordResult::Sphere(CoordSphere::new(sphere, atom_id))
-                    } else {
-                        CoordResult::Various(sphere_neighbor_results)
-                    }
+                    CoordResult::Various(sphere_neighbor_results)
                 }
             },
         )

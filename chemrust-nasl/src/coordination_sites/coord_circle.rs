@@ -7,7 +7,7 @@ use crate::{
     geometry::{
         approx_cmp_f64, Circle3d, CircleSphereIntersection, FloatOrdering, Intersect, Sphere,
     },
-    CoordPoint, CoordResult, CoordSite,
+    CoordPoint, CoordResult,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -94,6 +94,28 @@ impl CoordCircle {
                 // circle-sphere intersection
                 let sphere = Sphere::new(p, dist);
                 let circle_sphere = self.circle.intersect(&sphere);
+
+                // #[cfg(debug_assertions)]
+                // {
+                //     if i == 44 && self.atom_ids() == [24, 26] {
+                //         let cs_cc = self.circle().center() - sphere.center();
+                //         let cut_at = self.circle().n().dot(&cs_cc);
+                //         println!("Cut at and radius");
+                //         dbg!(cut_at.abs(), sphere.radius());
+                //         let new_circle_center = p + self.circle().n().scale(cut_at);
+                //         let new_circle_radius = (dist.powi(2) - cut_at.powi(2)).sqrt();
+                //         dbg!(new_circle_center, new_circle_radius);
+                //         dbg!(self.circle.center(), self.circle.radius());
+                //         let c1c2 = new_circle_center - self.circle.center();
+                //         let r1r2_sum_squared = (new_circle_radius + self.circle.radius()).powi(2);
+                //         dbg!(r1r2_sum_squared - c1c2.norm_squared());
+                //         dbg!(r1r2_sum_squared.sqrt() - c1c2.norm());
+                //         dbg!(approx_cmp_f64(c1c2.norm_squared(), r1r2_sum_squared));
+                //         let r1r2_diff_squared = (new_circle_radius - self.circle.radius()).powi(2);
+                //         dbg!(approx_cmp_f64(c1c2.norm_squared(), r1r2_diff_squared));
+                //         dbg!(circle_sphere);
+                //     }
+                // }
                 circle_sphere.to_coord_result(&self.atom_ids, i)
             })
             .collect();
@@ -113,26 +135,28 @@ impl CircleSphereIntersection {
     pub fn to_coord_result(self, circle_id: &[usize; 2], sphere_id: usize) -> CoordResult {
         match self {
             CircleSphereIntersection::Zero => CoordResult::Empty,
-            CircleSphereIntersection::Single(p) => CoordResult::SinglePoint(CoordPoint::new(
-                p,
-                [circle_id[0], circle_id[1], sphere_id].to_vec(),
-            )),
+            CircleSphereIntersection::Single(p) => {
+                let mut atom_id = [circle_id[0], circle_id[1], sphere_id].to_vec();
+                atom_id.sort();
+                CoordResult::SinglePoint(CoordPoint::new(p, atom_id))
+            }
             CircleSphereIntersection::Double(p1, p2) => {
                 let p = if let FloatOrdering::Greater = approx_cmp_f64(p1.z, p2.z) {
                     p1
                 } else {
                     p2
                 };
-                CoordResult::SinglePoint(CoordPoint::new(
-                    p,
-                    [circle_id[0], circle_id[1], sphere_id].to_vec(),
-                ))
+                let mut atom_id = [circle_id[0], circle_id[1], sphere_id].to_vec();
+                atom_id.sort();
+                CoordResult::SinglePoint(CoordPoint::new(p, atom_id))
             }
             // Actually impossible in our current case that every sphere
             // has the same radius, and thus there can't be a circle has the
             // same radius as the sphere
             CircleSphereIntersection::Circle(_) => CoordResult::Invalid,
             CircleSphereIntersection::InsideSphere => CoordResult::Invalid,
+            CircleSphereIntersection::SphereInCircle => CoordResult::Invalid,
+            CircleSphereIntersection::Invalid => CoordResult::Invalid,
         }
     }
 }

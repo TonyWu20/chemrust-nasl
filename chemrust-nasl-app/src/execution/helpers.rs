@@ -41,14 +41,16 @@ pub fn get_to_check_atom(
         .get_atom_data()
         .coords()
         .iter()
-        .filter_map(|cd| match cd {
+        .enumerate()
+        .filter_map(|(i, cd)| match cd {
             CoordData::Fractional(frac) => {
                 let point = frac.map(boundary_check);
                 if x_range.is_in_range(point.x)
                     && y_range.is_in_range(point.y)
                     && z_range.is_in_range(point.z)
                 {
-                    Some(model.get_cell_parameters().cell_tensor() * point)
+                    let point = model.get_cell_parameters().cell_tensor() * point;
+                    Some((i, point))
                 } else {
                     None
                 }
@@ -65,12 +67,12 @@ pub fn get_to_check_atom(
                     && y_range.is_in_range(point.y)
                     && z_range.is_in_range(point.z)
                 {
-                    Some(model.get_cell_parameters().cell_tensor() * point)
+                    let point = model.get_cell_parameters().cell_tensor() * point;
+                    Some((i, point))
                 } else {
                     None
                 }
             }
         })
-        .enumerate()
         .collect()
 }

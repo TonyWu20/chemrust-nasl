@@ -4,7 +4,7 @@ use nalgebra::{Point3, UnitVector3};
 
 use crate::geometry::primitives::{Circle3d, Sphere};
 
-use super::Intersect;
+use super::{approx_cmp_f64, FloatOrdering, Intersect};
 
 #[derive(Debug)]
 /// Relationship between two spheres
@@ -40,39 +40,42 @@ impl<'a> SphereSphereRelationship<'a> {
         let d = s2.center() - s1.center();
         let d_norm2 = d.norm_squared();
         let r1_plus_r2_2 = (s1.radius() + s2.radius()).powi(2);
-        let r1_diff_r2_2 = (s1.radius() - s2.radius()).powi(2);
         let larger_r = f64::max(s1.radius(), s2.radius());
         let smaller_r = f64::min(s1.radius(), s2.radius());
+        let r1_diff_r2 = (larger_r - smaller_r).powi(2);
         // edge cases
-        // 1. two spheres too far away (r1 + r2) < d
-        if d_norm2 - r1_plus_r2_2 > 5.0 * EPSILON {
-            Self::TooFarAway
-        }
-        // 2. one sphere is inside another, and the inner one
-        // doesn't touch the outer.
-        // d + r_small < r_large
-        else if d_norm2 - (larger_r - smaller_r).powi(2) < -5.0 * EPSILON {
-            Self::InsideOutOfReach
-        }
-        // 3. Two spheres touch from outside
-        // d = r1 + r2
-        // Take the floating point inaccracy in account
-        else if (d_norm2 - r1_plus_r2_2).abs() < EPSILON * 5.0 {
-            Self::OutsideCut
-        }
-        // 4. Overlaps
-        // d = 0, r1-r2 = 0
-        else if d_norm2 < EPSILON && r1_diff_r2_2 < EPSILON * 5.0 {
-            Self::Overlaps
-        }
-        // 5. One touches the outer from inside
-        // d + r_small = r_large
-        else if (d_norm2 - r1_diff_r2_2).abs() < EPSILON * 5.0 {
-            let (larger, smaller) = Self::cmp_sphere(s1, s2);
-            let direction = UnitVector3::new_normalize(smaller.center() - larger.center());
-            Self::InsideCut(larger, direction)
-        } else {
-            Self::Intersect
+        match approx_cmp_f64(r1_plus_r2_2, d_norm2) {
+            // 1. two spheres too far away (r1 + r2) < d
+            FloatOrdering::Less => Self::TooFarAway,
+            // 2. Two spheres touch from outside
+            // d = r1 + r2
+            FloatOrdering::Equal => Self::OutsideCut,
+            // Check r1-r2
+            FloatOrdering::Greater => {
+                match approx_cmp_f64(r1_diff_r2, d_norm2) {
+                    // 3. general intersect
+                    // r1 - r2 < d < r1 + r2
+                    FloatOrdering::Less => Self::Intersect,
+                    FloatOrdering::Equal => {
+                        // 4. Overlaps
+                        // d = 0, r1-r2 = 0
+                        if let FloatOrdering::Equal = approx_cmp_f64(r1_diff_r2, 0.0) {
+                            Self::Overlaps
+                        } else {
+                            // 5. One touches the outer from inside
+                            // d + r_small = r_large
+                            let (larger, smaller) = Self::cmp_sphere(s1, s2);
+                            let direction =
+                                UnitVector3::new_normalize(smaller.center() - larger.center());
+                            Self::InsideCut(larger, direction)
+                        }
+                    }
+                    // 6. one sphere is inside another, and the inner one
+                    // doesn't touch the outer.
+                    // d + r_small < r_large
+                    FloatOrdering::Greater => Self::InsideOutOfReach,
+                }
+            }
         }
     }
 }

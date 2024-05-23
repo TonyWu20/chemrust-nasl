@@ -10,6 +10,7 @@ pub use visualize::*;
 
 pub trait CoordSite {
     fn connecting_atoms_msg(&self) -> String;
+    fn site_type(&self) -> String;
 }
 
 impl CoordSite for CoordCircle {
@@ -23,11 +24,19 @@ impl CoordSite for CoordCircle {
                 .join("_")
         )
     }
+
+    fn site_type(&self) -> String {
+        "double".to_string()
+    }
 }
 
 impl CoordSite for CoordSphere {
     fn connecting_atoms_msg(&self) -> String {
         format!("single_{}", self.atom_id)
+    }
+
+    fn site_type(&self) -> String {
+        "single".to_string()
     }
 }
 
@@ -42,6 +51,10 @@ impl CoordSite for CoordPoint {
                 .collect::<Vec<String>>()
                 .join("_")
         )
+    }
+
+    fn site_type(&self) -> String {
+        "multi".to_string()
     }
 }
 
