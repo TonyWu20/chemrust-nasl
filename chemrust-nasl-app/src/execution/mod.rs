@@ -6,9 +6,7 @@ use chemrust_core::data::{
     geom::coordinates::CoordData,
     lattice::{cell_param::UnitCellParameters, CrystalModel},
 };
-use chemrust_nasl::{
-    search_sites, search_special_sites, SearchConfig, SearchReports, SearchResults, SiteIndex,
-};
+use chemrust_nasl::{search_sites, SearchConfig, SearchReports, SiteIndex};
 use nalgebra::Point3;
 
 use crate::yaml_parser::TaskTable;
@@ -24,7 +22,7 @@ mod format_identify;
 mod format_loader;
 mod helpers;
 
-pub fn search(task_config: &TaskTable) -> Result<SearchResults, Box<dyn Error>> {
+pub fn search(task_config: &TaskTable) -> Result<SearchReports, Box<dyn Error>> {
     let model = load_model(&task_config.model_path())?;
     let to_check = get_to_check_atom(
         &model,
@@ -48,7 +46,7 @@ pub fn search(task_config: &TaskTable) -> Result<SearchResults, Box<dyn Error>> 
     let site_index = SiteIndex::new(points);
     let search_config = SearchConfig::new(&to_check, task_config.target_bondlength());
     let search_report = search_sites(&site_index, &search_config);
-    Ok(search_sites)
+    Ok(search_report)
 }
 
 pub fn export_results_in_cell(
