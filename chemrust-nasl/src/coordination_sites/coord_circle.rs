@@ -37,7 +37,7 @@ impl CoordCircle {
         let possible_position: Vec<f64> = (0..32)
             .map(|i| FRAC_PI_2 + i as f64 * step_frac_pi_32)
             .collect();
-        let p = possible_position.iter().try_for_each(|theta| {
+        let p = possible_position.iter().try_for_each(|&theta| {
             let query = self.circle().get_point_on_circle(theta);
             if !kdtree
                 .within::<SquaredEuclidean>(&query.into(), (dist + 10_f64 * EPSILON).powi(2))
