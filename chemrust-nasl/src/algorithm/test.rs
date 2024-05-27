@@ -1,9 +1,4 @@
-use std::{
-    f64::{consts::FRAC_PI_4, EPSILON},
-    fs::read_to_string,
-    ops::ControlFlow,
-    path::Path,
-};
+use std::{fs::read_to_string, path::Path};
 
 use castep_cell_io::{CellDocument, CellParser, LatticeParam};
 
@@ -15,15 +10,9 @@ use chemrust_core::data::{
         CrystalModel, LatticeCell,
     },
 };
-use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use nalgebra::{Matrix3, Point3, Rotation3, UnitVector3, Vector3};
+use nalgebra::{Matrix3, Point3, Vector3};
 
-use crate::{
-    geometry::{approx_cmp_f64, FloatOrdering},
-    search_sites, SearchReports,
-};
-
-use super::{search_special_sites, SearchConfig, SiteIndex};
+use crate::{search_sites, SearchConfig, SearchReports, SiteIndex};
 
 fn load_model(model_rel_path: &str) -> Option<LatticeCell> {
     let root_dir = env!("CARGO_MANIFEST_DIR");
