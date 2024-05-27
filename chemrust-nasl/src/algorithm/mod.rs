@@ -17,7 +17,7 @@ use self::{
 
 use crate::{
     approx_eq_point_f64,
-    coordination_sites::{CoordCircle, CoordSphere, MultiCoordPoint},
+    coordination_sites::{CoordCircle, MultiCoordPoint},
     geometry::{approx_cmp_f64, FloatOrdering},
     DelegatePoint, FloatEq, Visualize,
 };
