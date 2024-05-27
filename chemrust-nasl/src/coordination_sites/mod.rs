@@ -60,7 +60,7 @@ impl CoordSite for MultiCoordPoint {
 
 impl CoordSite for DelegatePoint<1> {
     fn connecting_atoms_msg(&self) -> String {
-        format!("single_{}", self.atom_ids)
+        format!("single_{}", self.atom_ids[0])
     }
 
     fn site_type(&self) -> String {
