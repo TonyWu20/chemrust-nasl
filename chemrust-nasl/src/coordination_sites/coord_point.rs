@@ -6,19 +6,19 @@ use nalgebra::Point3;
 use crate::geometry::{approx_cmp_f64, approx_eq_point_f64, FloatEq, FloatOrdering};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CoordPoint {
+pub struct MultiCoordPoint {
     pub(crate) point: Point3<f64>,
     pub(crate) atom_ids: Vec<usize>,
 }
 
-impl CoordPoint {
+impl MultiCoordPoint {
     pub fn new(point: Point3<f64>, atom_ids: Vec<usize>) -> Self {
         Self { point, atom_ids }
     }
     pub(crate) fn cn(&self) -> usize {
         self.atom_ids.len()
     }
-    pub(crate) fn merge_with(&self, rhs: &Self) -> Option<CoordPoint> {
+    pub(crate) fn merge_with(&self, rhs: &Self) -> Option<MultiCoordPoint> {
         if let FloatEq::Eq = approx_eq_point_f64(self.point, rhs.point) {
             let new_connecting_atoms = [self.atom_ids.clone(), rhs.atom_ids.clone()].to_vec();
             let new_connecting_atoms_set: HashSet<usize> =
@@ -26,7 +26,7 @@ impl CoordPoint {
             let mut new_connecting_atoms_array: Vec<usize> =
                 new_connecting_atoms_set.into_iter().collect();
             new_connecting_atoms_array.sort();
-            Some(CoordPoint::new(self.point, new_connecting_atoms_array))
+            Some(MultiCoordPoint::new(self.point, new_connecting_atoms_array))
         } else {
             None
         }
@@ -36,7 +36,7 @@ impl CoordPoint {
         self,
         kdtree: &ImmutableKdTree<f64, 3>,
         dist: f64,
-    ) -> Option<CoordPoint> {
+    ) -> Option<MultiCoordPoint> {
         let query: [f64; 3] = self.point.into();
         let closer_than_dist = kdtree
             .within::<SquaredEuclidean>(&query, dist.powi(2))
@@ -55,10 +55,10 @@ impl CoordPoint {
         }
     }
     pub fn dedup_points(
-        points: &[CoordPoint],
+        points: &[MultiCoordPoint],
         kdtree: &ImmutableKdTree<f64, 3>,
         dist: f64,
-    ) -> Vec<CoordPoint> {
+    ) -> Vec<MultiCoordPoint> {
         let mut visited = vec![false; points.len()];
         points
             .iter()
@@ -70,14 +70,14 @@ impl CoordPoint {
             .collect()
     }
     fn look_for_same_points(
-        curr: (usize, &CoordPoint),
-        points: &[CoordPoint],
+        curr: (usize, &MultiCoordPoint),
+        points: &[MultiCoordPoint],
         visited: &mut [bool],
-    ) -> Option<CoordPoint> {
+    ) -> Option<MultiCoordPoint> {
         let (now, curr_p) = curr;
         if !visited[now] {
             visited[now] = true;
-            let same_points: Vec<CoordPoint> = points
+            let same_points: Vec<MultiCoordPoint> = points
                 .iter()
                 .enumerate()
                 .filter_map(|(to_check, p)| {
@@ -112,5 +112,25 @@ impl CoordPoint {
 
     pub fn point(&self) -> Point3<f64> {
         self.point
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegatePoint<const N: usize> {
+    pub(crate) point: Point3<f64>,
+    pub(crate) atom_ids: [usize; N],
+}
+
+impl<const N: usize> DelegatePoint<N> {
+    pub fn new(point: Point3<f64>, atom_ids: [usize; N]) -> Self {
+        Self { point, atom_ids }
+    }
+
+    pub fn point(&self) -> Point3<f64> {
+        self.point
+    }
+
+    pub fn atom_ids(&self) -> &[usize] {
+        &self.atom_ids
     }
 }

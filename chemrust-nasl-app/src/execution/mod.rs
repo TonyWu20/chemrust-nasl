@@ -6,10 +6,10 @@ use chemrust_core::data::{
     geom::coordinates::CoordData,
     lattice::{cell_param::UnitCellParameters, CrystalModel},
 };
-use chemrust_nasl::{search_sites, SearchConfig, SearchReports, SearchResults, SiteIndex};
+use chemrust_nasl::{search_sites, SearchConfig, SearchReports, SiteIndex};
 use nalgebra::Point3;
 
-use crate::yaml_parser::TaskTable;
+use crate::{error::RunError, yaml_parser::TaskTable};
 
 use self::{
     export::export_all,
@@ -22,7 +22,7 @@ mod format_identify;
 mod format_loader;
 mod helpers;
 
-pub fn search(task_config: &TaskTable) -> Result<SearchResults, Box<dyn Error>> {
+pub fn search(task_config: &TaskTable) -> Result<SearchReports, Box<dyn Error>> {
     let model = load_model(&task_config.model_path())?;
     let to_check = get_to_check_atom(
         &model,
@@ -45,22 +45,17 @@ pub fn search(task_config: &TaskTable) -> Result<SearchResults, Box<dyn Error>> 
         .collect();
     let site_index = SiteIndex::new(points);
     let search_config = SearchConfig::new(&to_check, task_config.target_bondlength());
-    let search_sites = search_sites(&site_index, &search_config);
-    #[cfg(debug_assertions)]
+    let search_report = search_sites(&site_index, &search_config);
+    if search_report.viable_single_points().is_none()
+        && search_report.viable_double_points().is_none()
+        && search_report.points().is_none()
     {
-        if let SearchResults::Found(report) = &search_sites {
-            let validated_spheres =
-                SearchReports::validated_results(report.spheres(), &site_index, &search_config);
-            dbg!(validated_spheres.len(), report.spheres().len());
-            let validated_circles =
-                SearchReports::validated_results(report.circles(), &site_index, &search_config);
-            dbg!(validated_circles.len(), report.circles().len());
-            let validated_points =
-                SearchReports::validated_results(report.points(), &site_index, &search_config);
-            dbg!(validated_points.len(), report.points().len());
-        }
+        Err(Box::new(RunError::Message(
+            "No available results for this config.".to_string(),
+        )))
+    } else {
+        Ok(search_report)
     }
-    Ok(search_sites)
 }
 
 pub fn export_results_in_cell(

@@ -1,15 +1,17 @@
+use rayon::prelude::*;
+
 use super::{SearchConfig, SiteIndex};
 
-use crate::coordination_sites::{CoordCircle, CoordPoint, CoordResult};
+use crate::coordination_sites::{CoordCircle, CoordResult, MultiCoordPoint};
 
 #[derive(Debug, Clone)]
 pub struct CircleCheckResult {
     circles: Vec<CoordCircle>,
-    points: Vec<CoordPoint>,
+    points: Vec<MultiCoordPoint>,
 }
 
 impl CircleCheckResult {
-    pub fn new(circles: Vec<CoordCircle>, points: Vec<CoordPoint>) -> Self {
+    pub fn new(circles: Vec<CoordCircle>, points: Vec<MultiCoordPoint>) -> Self {
         Self { circles, points }
     }
 
@@ -17,7 +19,7 @@ impl CircleCheckResult {
         self.circles.as_ref()
     }
 
-    pub fn points(&self) -> &[CoordPoint] {
+    pub fn points(&self) -> &[MultiCoordPoint] {
         self.points.as_ref()
     }
 }
@@ -31,17 +33,18 @@ pub fn check_circles(
     let points = site_index.coords();
     let dist = search_config.bondlength;
     let mut coord_circles: Vec<CoordCircle> = Vec::new();
-    let mut coord_points: Vec<CoordPoint> = Vec::new();
-    unchecked_circles
-        .iter()
+    let mut coord_points: Vec<MultiCoordPoint> = Vec::new();
+    let check_results: Vec<CoordResult> = unchecked_circles
+        .par_iter()
         .filter_map(|circ| -> Option<CoordResult> {
             circ.common_neighbours_intersect(kdtree, points, dist)
         })
-        .for_each(|result| match result {
-            CoordResult::Circle(c) => coord_circles.push(c),
-            CoordResult::Points(mut points) => coord_points.append(&mut points),
-            _ => (),
-        });
+        .collect();
+    check_results.into_iter().for_each(|result| match result {
+        CoordResult::Circle(c) => coord_circles.push(c),
+        CoordResult::Points(mut points) => coord_points.append(&mut points),
+        _ => (),
+    });
     CircleCheckResult {
         circles: coord_circles,
         points: coord_points,

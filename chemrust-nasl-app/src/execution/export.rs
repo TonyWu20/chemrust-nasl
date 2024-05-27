@@ -5,7 +5,7 @@ use std::{fs::create_dir, io::Error as IoError};
 
 use castep_cell_io::{CellDocument, IonicPosition};
 use chemrust_core::data::lattice::cell_param::UnitCellParameters;
-use chemrust_nasl::{CoordPoint, CoordSite, SearchReports, Visualize};
+use chemrust_nasl::{CoordSite, DelegatePoint, MultiCoordPoint, SearchReports, Visualize};
 
 use crate::yaml_parser::TaskTable;
 
@@ -15,35 +15,46 @@ pub fn export_all<T: UnitCellParameters>(
     task_config: &TaskTable,
     results: &SearchReports,
 ) -> Result<(), IoError> {
-    if !results.spheres().is_empty() {
-        export(base_model, cell_param, task_config, results.spheres())?;
-        collectively_export(base_model, cell_param, task_config, results.spheres())?;
+    if let Some(multi_points) = results.points() {
+        let boundary_checked: Vec<MultiCoordPoint> =
+            points_boundary_check(multi_points, cell_param);
+        export(base_model, cell_param, task_config, &boundary_checked)?;
+        collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
     }
-    if !results.circles().is_empty() {
-        export(base_model, cell_param, task_config, results.circles())?;
-        collectively_export(base_model, cell_param, task_config, results.circles())?;
+    if let Some(single_points) = results.viable_single_points() {
+        let boundary_checked: Vec<DelegatePoint<1>> =
+            points_boundary_check(single_points, cell_param);
+        export(base_model, cell_param, task_config, &boundary_checked)?;
+        collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
     }
-    if !results.points().is_empty() {
-        let boundary_checked: Vec<CoordPoint> = results
-            .points()
-            .iter()
-            .filter(|cp| {
-                let frac_coord = cp.fractional_coord(cell_param.cell_tensor());
-                let check = frac_coord.iter().try_for_each(|&v| {
-                    if !(0.0..=1.0).contains(&v) {
-                        ControlFlow::Break(v)
-                    } else {
-                        ControlFlow::Continue(())
-                    }
-                });
-                matches!(check, ControlFlow::Continue(()))
-            })
-            .cloned()
-            .collect();
+    if let Some(double_points) = results.viable_double_points() {
+        let boundary_checked: Vec<DelegatePoint<2>> =
+            points_boundary_check(double_points, cell_param);
         export(base_model, cell_param, task_config, &boundary_checked)?;
         collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
     }
     Ok(())
+}
+
+fn points_boundary_check<T: Visualize + Clone, U: UnitCellParameters>(
+    points: &[T],
+    cell_param: &U,
+) -> Vec<T> {
+    points
+        .iter()
+        .filter(|cp| {
+            let frac_coord = cp.fractional_coord(cell_param.cell_tensor());
+            let check = frac_coord.iter().try_for_each(|&v| {
+                if !(0.0..=1.0).contains(&v) {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            });
+            matches!(check, ControlFlow::Continue(()))
+        })
+        .cloned()
+        .collect::<Vec<T>>()
 }
 
 fn export_filename<T: CoordSite>(coord_site: &T, task_config: &TaskTable) -> PathBuf {

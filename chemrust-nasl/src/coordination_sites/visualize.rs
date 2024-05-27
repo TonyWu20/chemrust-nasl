@@ -1,8 +1,12 @@
+use std::f64::consts::FRAC_PI_2;
+
 use castep_periodic_table::element::ElementSymbol;
 use chemrust_core::data::geom::coordinates::CoordData;
-use nalgebra::{Matrix3, Point3, UnitVector3, Vector3};
+use nalgebra::{Matrix3, Point3, Vector3};
 
-use super::{CoordCircle, CoordPoint, CoordSphere};
+use crate::DelegatePoint;
+
+use super::{CoordCircle, CoordSphere, MultiCoordPoint};
 
 pub trait Visualize {
     type Output;
@@ -60,17 +64,7 @@ impl Visualize for CoordCircle {
     }
 
     fn determine_coord(&self) -> Point3<f64> {
-        let (x, y, _z) = (self.circle.n().x, self.circle.n().y, self.circle.n().z);
-        // We want the v2 to act as the "z-axis" after transformation
-        let pre_v1 = Vector3::new(-1.0 * y, x, 0.0);
-        let v1 = if pre_v1.norm_squared() < f64::EPSILON {
-            // such v1 becomes a null vector when the normal is (0, 0, z)
-            Vector3::x_axis()
-        } else {
-            UnitVector3::new_normalize(pre_v1)
-        };
-        let v2 = self.circle.n().cross(&v1);
-        self.circle.center() + (v1.scale(0.0) + v2.scale(1.0)).scale(self.circle.radius())
+        self.circle().get_point_on_circle(FRAC_PI_2)
     }
 
     fn element_by_cn_number(&self) -> ElementSymbol {
@@ -78,7 +72,7 @@ impl Visualize for CoordCircle {
     }
 }
 
-impl Visualize for CoordPoint {
+impl Visualize for MultiCoordPoint {
     type Output = Atom;
 
     fn draw_with_element(&self, element_symbol: ElementSymbol) -> Self::Output {
@@ -95,5 +89,21 @@ impl Visualize for CoordPoint {
         } else {
             ElementSymbol::Np
         }
+    }
+}
+
+impl<const N: usize> Visualize for DelegatePoint<N> {
+    type Output = Atom;
+
+    fn determine_coord(&self) -> Point3<f64> {
+        self.point
+    }
+
+    fn element_by_cn_number(&self) -> ElementSymbol {
+        ElementSymbol::Xe
+    }
+
+    fn draw_with_element(&self, element_symbol: ElementSymbol) -> Self::Output {
+        Atom::new(element_symbol, CoordData::Cartesian(self.determine_coord()))
     }
 }

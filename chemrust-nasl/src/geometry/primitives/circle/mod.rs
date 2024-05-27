@@ -1,4 +1,4 @@
-use nalgebra::{Point3, UnitVector3};
+use nalgebra::{Point3, UnitVector3, Vector3};
 
 use super::plane::Plane;
 
@@ -39,5 +39,19 @@ impl Circle3d {
         let min_dist = (min_x.powi(2) + op_projection_height.powi(2)).sqrt();
         let max_dist = (max_x.powi(2) + op_projection_height.powi(2)).sqrt();
         (min_dist, max_dist)
+    }
+
+    pub fn get_point_on_circle(&self, theta: f64) -> Point3<f64> {
+        let (x, y, _z) = (self.n().x, self.n().y, self.n().z);
+        // We want the v2 to act as the "z-axis" after transformation
+        let pre_v1 = Vector3::new(-1.0 * y, x, 0.0);
+        let v1 = if pre_v1.norm_squared() < f64::EPSILON {
+            // such v1 becomes a null vector when the normal is (0, 0, z)
+            Vector3::x_axis()
+        } else {
+            UnitVector3::new_normalize(pre_v1)
+        };
+        let v2 = self.n().cross(&v1);
+        self.center() + (v1.scale(theta.cos()) + v2.scale(theta.sin())).scale(self.radius())
     }
 }

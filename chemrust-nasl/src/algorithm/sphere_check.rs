@@ -6,18 +6,18 @@ use crate::geometry::{Intersect, Sphere, SphereSphereResult};
 
 use super::{SearchConfig, SiteIndex};
 
-use crate::coordination_sites::{CoordCircle, CoordPoint, CoordResult, CoordSphere};
+use crate::coordination_sites::{CoordCircle, CoordResult, CoordSphere, MultiCoordPoint};
 
 #[derive(Debug)]
-pub struct SphereCheckResult {
-    single_points: Vec<CoordPoint>,
+pub(crate) struct SphereCheckResult {
+    single_points: Vec<MultiCoordPoint>,
     unchecked_circles: Vec<CoordCircle>,
     spheres: Vec<CoordSphere>,
 }
 
 impl SphereCheckResult {
     pub fn new(
-        single_points: Vec<CoordPoint>,
+        single_points: Vec<MultiCoordPoint>,
         unchecked_circles: Vec<CoordCircle>,
         spheres: Vec<CoordSphere>,
     ) -> Self {
@@ -28,7 +28,7 @@ impl SphereCheckResult {
         }
     }
 
-    pub fn single_points(&self) -> &[CoordPoint] {
+    pub fn single_points(&self) -> &[MultiCoordPoint] {
         self.single_points.as_ref()
     }
 
@@ -74,7 +74,7 @@ pub fn sphere_check(site_index: &SiteIndex, search_config: &SearchConfig) -> Sph
                                 match sphere.intersect(&nb_sphere) {
                                     SphereSphereResult::Empty => None,
                                     SphereSphereResult::Point(p) => {
-                                        let coord_point = CoordPoint::new(p, id_pair.to_vec());
+                                        let coord_point = MultiCoordPoint::new(p, id_pair.to_vec());
                                         coord_point
                                             .no_closer_atoms(
                                                 site_index.coord_tree(),
@@ -105,7 +105,7 @@ pub fn sphere_check(site_index: &SiteIndex, search_config: &SearchConfig) -> Sph
         .iter()
         .filter_map(|res| res.try_pull_circles_from_various().ok())
         .collect();
-    let points: Vec<Vec<CoordPoint>> = results
+    let points: Vec<Vec<MultiCoordPoint>> = results
         .iter_mut()
         .filter_map(|res| res.try_pull_single_points_from_various().ok())
         .collect();
