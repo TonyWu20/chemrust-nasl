@@ -9,7 +9,7 @@ use chemrust_core::data::{
 use chemrust_nasl::{search_sites, SearchConfig, SearchReports, SiteIndex};
 use nalgebra::Point3;
 
-use crate::yaml_parser::TaskTable;
+use crate::{error::RunError, yaml_parser::TaskTable};
 
 use self::{
     export::export_all,
@@ -46,7 +46,16 @@ pub fn search(task_config: &TaskTable) -> Result<SearchReports, Box<dyn Error>> 
     let site_index = SiteIndex::new(points);
     let search_config = SearchConfig::new(&to_check, task_config.target_bondlength());
     let search_report = search_sites(&site_index, &search_config);
-    Ok(search_report)
+    if search_report.viable_single_points().is_none()
+        && search_report.viable_double_points().is_none()
+        && search_report.points().is_none()
+    {
+        Err(Box::new(RunError::Message(
+            "No available results for this config.".to_string(),
+        )))
+    } else {
+        Ok(search_report)
+    }
 }
 
 pub fn export_results_in_cell(
