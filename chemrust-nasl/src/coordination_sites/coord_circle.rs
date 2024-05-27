@@ -1,9 +1,6 @@
 use std::{
     collections::HashSet,
-    f64::{
-        consts::{FRAC_PI_2, FRAC_PI_8},
-        EPSILON,
-    },
+    f64::consts::{FRAC_PI_2, FRAC_PI_8},
     ops::ControlFlow,
 };
 
@@ -39,17 +36,19 @@ impl CoordCircle {
             .collect();
         let p = possible_position.iter().try_for_each(|&theta| {
             let query = self.circle().get_point_on_circle(theta);
-            if !kdtree
-                .within::<SquaredEuclidean>(&query.into(), (dist + 10_f64 * EPSILON).powi(2))
-                .iter()
-                .any(|nb| {
-                    matches!(
-                        approx_cmp_f64(nb.distance, dist.powi(2)),
-                        FloatOrdering::Less
-                    )
-                })
-            {
-                ControlFlow::Break(query)
+            let neighbours =
+                kdtree.within::<SquaredEuclidean>(&query.into(), (dist + 1e-5_f64).powi(2));
+            if !neighbours.iter().any(|nb| {
+                matches!(
+                    approx_cmp_f64(nb.distance, dist.powi(2)),
+                    FloatOrdering::Less
+                )
+            }) {
+                if neighbours.len() <= 2 {
+                    ControlFlow::Break(query)
+                } else {
+                    ControlFlow::Continue(())
+                }
             } else {
                 ControlFlow::Continue(())
             }
