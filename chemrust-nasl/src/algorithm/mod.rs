@@ -1,12 +1,25 @@
-use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use nalgebra::Point3;
+use std::{
+    f64::{
+        consts::{FRAC_PI_2, FRAC_PI_8},
+        EPSILON,
+    },
+    ops::ControlFlow,
+};
 
-use self::{circle_check::check_circles, sphere_check::sphere_check};
+use kiddo::{ImmutableKdTree, SquaredEuclidean};
+use nalgebra::{Point3, UnitVector3, Vector3};
+use rayon::prelude::*;
+
+use self::{
+    circle_check::check_circles,
+    sphere_check::{sphere_check, SphereCheckResult},
+};
 
 use crate::{
-    coordination_sites::{CoordCircle, CoordPoint, CoordSphere},
+    approx_eq_point_f64,
+    coordination_sites::{CoordCircle, CoordSphere, MultiCoordPoint},
     geometry::{approx_cmp_f64, FloatOrdering},
-    Visualize,
+    DelegatePoint, FloatEq, Visualize,
 };
 
 mod circle_check;
@@ -24,6 +37,14 @@ impl<'a> SearchConfig<'a> {
             to_check,
             bondlength,
         }
+    }
+
+    pub fn to_check(&self) -> &[(usize, Point3<f64>)] {
+        self.to_check
+    }
+
+    pub fn bondlength(&self) -> f64 {
+        self.bondlength
     }
 }
 
@@ -57,41 +78,36 @@ impl SiteIndex {
 
 #[derive(Debug)]
 pub struct SearchReports {
-    spheres: Vec<CoordSphere>,
-    circles: Vec<CoordCircle>,
-    points: Vec<CoordPoint>,
-}
-
-#[derive(Debug)]
-pub enum SearchResults {
-    Found(SearchReports),
-    Empty,
+    points: Option<Vec<MultiCoordPoint>>,
+    viable_single_points: Option<Vec<DelegatePoint<1>>>,
+    viable_double_points: Option<Vec<DelegatePoint<2>>>,
 }
 
 impl SearchReports {
     pub fn new(
-        spheres: Vec<CoordSphere>,
-        circles: Vec<CoordCircle>,
-        points: Vec<CoordPoint>,
+        points: Option<Vec<MultiCoordPoint>>,
+        viable_single_points: Option<Vec<DelegatePoint<1>>>,
+        viable_double_points: Option<Vec<DelegatePoint<2>>>,
     ) -> Self {
         Self {
-            spheres,
-            circles,
             points,
+            viable_single_points,
+            viable_double_points,
         }
     }
 
-    pub fn spheres(&self) -> &[CoordSphere] {
-        self.spheres.as_ref()
-    }
-
-    pub fn circles(&self) -> &[CoordCircle] {
-        self.circles.as_ref()
-    }
-
-    pub fn points(&self) -> &[CoordPoint] {
+    pub fn points(&self) -> Option<&Vec<MultiCoordPoint>> {
         self.points.as_ref()
     }
+
+    pub fn viable_single_points(&self) -> Option<&Vec<DelegatePoint<1>>> {
+        self.viable_single_points.as_ref()
+    }
+
+    pub fn viable_double_points(&self) -> Option<&Vec<DelegatePoint<2>>> {
+        self.viable_double_points.as_ref()
+    }
+
     pub fn validated_results<T: Visualize + Clone>(
         coord_sites: &[T],
         site_index: &SiteIndex,
@@ -105,8 +121,23 @@ impl SearchReports {
     }
 }
 
-pub fn search_sites(site_index: &SiteIndex, search_config: &SearchConfig) -> SearchResults {
+pub fn search_sites(site_index: &SiteIndex, search_config: &SearchConfig) -> SearchReports {
     let sphere_intersect_results = sphere_check(site_index, search_config);
+    let special_sites = search_special_sites(&sphere_intersect_results, site_index, search_config);
+    let viable_single_sites = search_possible_single_points(site_index, search_config);
+    let viable_double_sites = search_possible_double_points(
+        sphere_intersect_results.unchecked_circles(),
+        site_index.coord_tree(),
+        search_config.bondlength(),
+    );
+    SearchReports::new(special_sites, viable_single_sites, viable_double_sites)
+}
+
+fn search_special_sites(
+    sphere_intersect_results: &SphereCheckResult,
+    site_index: &SiteIndex,
+    search_config: &SearchConfig,
+) -> Option<Vec<MultiCoordPoint>> {
     let circle_check_results = check_circles(
         sphere_intersect_results.unchecked_circles(),
         site_index,
@@ -119,18 +150,174 @@ pub fn search_sites(site_index: &SiteIndex, search_config: &SearchConfig) -> Sea
     ]
     .concat();
     let dedup_points =
-        CoordPoint::dedup_points(&points, site_index.coord_tree(), search_config.bondlength);
-    if sphere_intersect_results.spheres().is_empty()
-        && pure_circles.is_empty()
-        && dedup_points.is_empty()
-    {
-        SearchResults::Empty
+        MultiCoordPoint::dedup_points(&points, site_index.coord_tree(), search_config.bondlength);
+    if !dedup_points.is_empty() {
+        println!("Special multi-coordinated sites search completed.");
+        Some(dedup_points)
     } else {
-        SearchResults::Found(SearchReports::new(
-            sphere_intersect_results.spheres().to_vec(),
-            pure_circles.to_vec(),
-            dedup_points,
-        ))
+        None
+    }
+}
+
+fn search_possible_single_points(
+    site_index: &SiteIndex,
+    search_config: &SearchConfig,
+) -> Option<Vec<DelegatePoint<1>>> {
+    let results: Vec<DelegatePoint<1>> = search_config
+        .to_check()
+        .par_iter()
+        .filter_map(|&(i, pt)| {
+            brute_force(pt, search_config.bondlength(), site_index.coord_tree())
+                .map(|coord| DelegatePoint::<1>::new(coord, [i]))
+        })
+        .collect();
+    if !results.is_empty() {
+        Some(results)
+    } else {
+        None
+    }
+}
+
+fn search_possible_double_points(
+    unchecked_circles: &[CoordCircle],
+    kdtree: &ImmutableKdTree<f64, 3>,
+    dist: f64,
+) -> Option<Vec<DelegatePoint<2>>> {
+    let results: Vec<DelegatePoint<2>> = unchecked_circles
+        .par_iter()
+        .filter_map(|circ| circ.get_possible_point(kdtree, dist))
+        .collect();
+    if !results.is_empty() {
+        Some(results)
+    } else {
+        None
+    }
+}
+
+fn brute_force(
+    origin: Point3<f64>,
+    dist: f64,
+    kdtree: &ImmutableKdTree<f64, 3>,
+) -> Option<Point3<f64>> {
+    let step = FRAC_PI_8 / 2_f64;
+    let azimuth: [f64; 32] = (0..32)
+        .map(|i| i as f64 * step)
+        .collect::<Vec<f64>>()
+        .try_into()
+        .unwrap();
+    let elevation: [f64; 8] = (0..8)
+        .map(|i| i as f64 * step)
+        .collect::<Vec<f64>>()
+        .try_into()
+        .unwrap();
+    let positions = elevation
+        .iter()
+        .map(|e| {
+            azimuth
+                .iter()
+                .map(|a| {
+                    let z = dist * e.sin();
+                    let y = dist * e.cos() * a.sin();
+                    let x = dist * e.cos() * a.cos();
+                    Vector3::new(x, y, z)
+                })
+                .collect()
+        })
+        .collect::<Vec<Vec<Vector3<f64>>>>()
+        .concat();
+    let initial = Vector3::z_axis().scale(dist);
+    let candidates = [[initial].to_vec(), positions].concat();
+    let p = candidates.iter().try_for_each(|dir| {
+        let p = origin + dir;
+        if kdtree
+            .within::<SquaredEuclidean>(&p.into(), (dist + 10_f64 * EPSILON).powi(2))
+            .iter()
+            .any(|nb| {
+                matches!(
+                    approx_cmp_f64(nb.distance, dist.powi(2)),
+                    FloatOrdering::Less
+                )
+            })
+        {
+            ControlFlow::Continue(())
+        } else {
+            ControlFlow::Break(p)
+        }
+    });
+    match p {
+        ControlFlow::Continue(_) => None,
+        ControlFlow::Break(point) => Some(point),
+    }
+}
+
+fn try_get_single_point(
+    origin: Point3<f64>,
+    dist: f64,
+    kdtree: &ImmutableKdTree<f64, 3>,
+) -> Option<Point3<f64>> {
+    let init_direction: UnitVector3<f64> = Vector3::z_axis();
+    let mut step_angle = FRAC_PI_2;
+    let mut p: Option<Point3<f64>> = None;
+    let max_iteration: u32 = 1;
+    let mut counter: u32 = 0;
+    let reference_point = origin + init_direction.scale(dist);
+    while counter < max_iteration {
+        if let Some(point) =
+            recursive_search(origin, init_direction, dist, kdtree, reference_point, true)
+        {
+            p = Some(point);
+            break;
+        } else {
+            dbg!(counter);
+            step_angle /= 2.0;
+            counter += 1;
+        }
+    }
+    // #[cfg(debug_assertions)]
+    // {
+    dbg!(counter);
+    // }
+    p
+}
+
+fn recursive_search(
+    origin: Point3<f64>,
+    direction: UnitVector3<f64>,
+    dist: f64,
+    kdtree: &ImmutableKdTree<f64, 3>,
+    reference_point: Point3<f64>,
+    init: bool,
+) -> Option<Point3<f64>> {
+    if let FloatOrdering::Less = approx_cmp_f64(direction.z, 0.0) {
+        return None;
+    }
+    let new_point = origin + direction.scale(dist);
+    let cmp = approx_eq_point_f64(new_point, reference_point);
+    let is_same = match cmp {
+        FloatEq::NotEq => false,
+        FloatEq::Eq => true,
+    };
+    if !init && is_same {
+        dbg!("same");
+        return None;
+    }
+    if kdtree
+        .within::<SquaredEuclidean>(&new_point.into(), (dist + 10_f64 * EPSILON).powi(2))
+        .iter()
+        .any(|nb| {
+            matches!(
+                approx_cmp_f64(nb.distance, dist.powi(2)),
+                FloatOrdering::Less
+            )
+        })
+    {
+        None
+    } else {
+        #[cfg(debug_assertions)]
+        {
+            dbg!("Yes");
+        }
+        Some(new_point)
     }
 }
 
