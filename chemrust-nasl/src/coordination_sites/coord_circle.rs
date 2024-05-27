@@ -1,4 +1,11 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    f64::{
+        consts::{FRAC_PI_2, FRAC_PI_8},
+        EPSILON,
+    },
+    ops::ControlFlow,
+};
 
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use nalgebra::Point3;
@@ -7,7 +14,7 @@ use crate::{
     geometry::{
         approx_cmp_f64, Circle3d, CircleSphereIntersection, FloatOrdering, Intersect, Sphere,
     },
-    CoordPoint, CoordResult,
+    CoordResult, DelegatePoint, MultiCoordPoint,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -20,6 +27,39 @@ impl CoordCircle {
     pub fn new(circle: Circle3d, atom_ids: [usize; 2]) -> Self {
         Self { circle, atom_ids }
     }
+
+    pub fn get_possible_point(
+        &self,
+        kdtree: &ImmutableKdTree<f64, 3>,
+        dist: f64,
+    ) -> Option<DelegatePoint<2>> {
+        let step_frac_pi_32 = FRAC_PI_8 / 4.0;
+        let possible_position: Vec<f64> = (0..32)
+            .map(|i| FRAC_PI_2 + i as f64 * step_frac_pi_32)
+            .collect();
+        let p = possible_position.iter().try_for_each(|theta| {
+            let query = self.circle().get_point_on_circle(theta);
+            if !kdtree
+                .within::<SquaredEuclidean>(&query.into(), (dist + 10_f64 * EPSILON).powi(2))
+                .iter()
+                .any(|nb| {
+                    matches!(
+                        approx_cmp_f64(nb.distance, dist.powi(2)),
+                        FloatOrdering::Less
+                    )
+                })
+            {
+                ControlFlow::Break(query)
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        match p {
+            ControlFlow::Continue(_) => None,
+            ControlFlow::Break(pos) => Some(DelegatePoint::<2>::new(pos, self.atom_ids)),
+        }
+    }
+
     fn get_common_neighbours(
         &self,
         kdtree: &ImmutableKdTree<f64, 3>,
@@ -62,7 +102,7 @@ impl CoordCircle {
         {
             Some(CoordResult::Circle(*self))
         } else {
-            let coord_points: Vec<CoordPoint> = neighbour_results
+            let coord_points: Vec<MultiCoordPoint> = neighbour_results
                 .iter()
                 .filter_map(|res| {
                     if let CoordResult::SinglePoint(coord_point) = res {
@@ -138,7 +178,7 @@ impl CircleSphereIntersection {
             CircleSphereIntersection::Single(p) => {
                 let mut atom_id = [circle_id[0], circle_id[1], sphere_id].to_vec();
                 atom_id.sort();
-                CoordResult::SinglePoint(CoordPoint::new(p, atom_id))
+                CoordResult::SinglePoint(MultiCoordPoint::new(p, atom_id))
             }
             CircleSphereIntersection::Double(p1, p2) => {
                 let p = if let FloatOrdering::Greater = approx_cmp_f64(p1.z, p2.z) {
@@ -148,7 +188,7 @@ impl CircleSphereIntersection {
                 };
                 let mut atom_id = [circle_id[0], circle_id[1], sphere_id].to_vec();
                 atom_id.sort();
-                CoordResult::SinglePoint(CoordPoint::new(p, atom_id))
+                CoordResult::SinglePoint(MultiCoordPoint::new(p, atom_id))
             }
             // Actually impossible in our current case that every sphere
             // has the same radius, and thus there can't be a circle has the
