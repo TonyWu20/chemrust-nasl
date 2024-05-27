@@ -6,7 +6,9 @@ use chemrust_core::data::{
     geom::coordinates::CoordData,
     lattice::{cell_param::UnitCellParameters, CrystalModel},
 };
-use chemrust_nasl::{search_sites, SearchConfig, SearchReports, SearchResults, SiteIndex};
+use chemrust_nasl::{
+    search_sites, search_special_sites, SearchConfig, SearchReports, SearchResults, SiteIndex,
+};
 use nalgebra::Point3;
 
 use crate::yaml_parser::TaskTable;
@@ -45,21 +47,7 @@ pub fn search(task_config: &TaskTable) -> Result<SearchResults, Box<dyn Error>> 
         .collect();
     let site_index = SiteIndex::new(points);
     let search_config = SearchConfig::new(&to_check, task_config.target_bondlength());
-    let search_sites = search_sites(&site_index, &search_config);
-    #[cfg(debug_assertions)]
-    {
-        if let SearchResults::Found(report) = &search_sites {
-            let validated_spheres =
-                SearchReports::validated_results(report.spheres(), &site_index, &search_config);
-            dbg!(validated_spheres.len(), report.spheres().len());
-            let validated_circles =
-                SearchReports::validated_results(report.circles(), &site_index, &search_config);
-            dbg!(validated_circles.len(), report.circles().len());
-            let validated_points =
-                SearchReports::validated_results(report.points(), &site_index, &search_config);
-            dbg!(validated_points.len(), report.points().len());
-        }
-    }
+    let search_report = search_sites(&site_index, &search_config);
     Ok(search_sites)
 }
 
