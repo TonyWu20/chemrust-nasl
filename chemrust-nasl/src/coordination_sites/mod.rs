@@ -4,7 +4,7 @@ mod coord_sphere;
 mod visualize;
 
 pub use coord_circle::CoordCircle;
-pub use coord_point::CoordPoint;
+pub use coord_point::{DelegatePoint, MultiCoordPoint};
 pub use coord_sphere::CoordSphere;
 pub use visualize::*;
 
@@ -40,7 +40,7 @@ impl CoordSite for CoordSphere {
     }
 }
 
-impl CoordSite for CoordPoint {
+impl CoordSite for MultiCoordPoint {
     fn connecting_atoms_msg(&self) -> String {
         format!(
             "multi_cn_{}_{}",
@@ -58,14 +58,34 @@ impl CoordSite for CoordPoint {
     }
 }
 
+impl CoordSite for DelegatePoint<1> {
+    fn connecting_atoms_msg(&self) -> String {
+        format!("single_{}", self.atom_ids)
+    }
+
+    fn site_type(&self) -> String {
+        "single".to_string()
+    }
+}
+
+impl CoordSite for DelegatePoint<2> {
+    fn connecting_atoms_msg(&self) -> String {
+        format!("double_{}_{}", self.atom_ids[0], self.atom_ids[1])
+    }
+
+    fn site_type(&self) -> String {
+        "double".to_string()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum CoordResult {
     Invalid,
     Empty,
     Sphere(CoordSphere),
     Circle(CoordCircle),
-    SinglePoint(CoordPoint),
-    Points(Vec<CoordPoint>),
+    SinglePoint(MultiCoordPoint),
+    Points(Vec<MultiCoordPoint>),
     Various(Vec<CoordResult>),
 }
 
@@ -86,7 +106,7 @@ impl CoordResult {
         }
     }
 
-    pub fn try_into_single_point(self) -> Result<CoordPoint, Self> {
+    pub fn try_into_single_point(self) -> Result<MultiCoordPoint, Self> {
         if let Self::SinglePoint(v) = self {
             Ok(v)
         } else {
@@ -94,14 +114,14 @@ impl CoordResult {
         }
     }
 
-    pub fn try_into_points(self) -> Result<Vec<CoordPoint>, Self> {
+    pub fn try_into_points(self) -> Result<Vec<MultiCoordPoint>, Self> {
         if let Self::Points(v) = self {
             Ok(v)
         } else {
             Err(self)
         }
     }
-    pub fn try_pull_single_points_from_various(&self) -> Result<Vec<CoordPoint>, &Self> {
+    pub fn try_pull_single_points_from_various(&self) -> Result<Vec<MultiCoordPoint>, &Self> {
         if let Self::Various(v) = self {
             Ok(v.iter()
                 .filter_map(|res| {
@@ -116,9 +136,9 @@ impl CoordResult {
             Err(self)
         }
     }
-    pub fn try_pull_points_from_various(&self) -> Result<Vec<CoordPoint>, &Self> {
+    pub fn try_pull_points_from_various(&self) -> Result<Vec<MultiCoordPoint>, &Self> {
         if let Self::Various(v) = self {
-            let points: Vec<Vec<CoordPoint>> = v
+            let points: Vec<Vec<MultiCoordPoint>> = v
                 .iter()
                 .filter_map(|res| {
                     if let CoordResult::Points(p) = res {
