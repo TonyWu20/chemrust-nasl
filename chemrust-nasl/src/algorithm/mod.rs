@@ -143,7 +143,6 @@ fn search_special_sites(
         site_index,
         search_config,
     );
-    let pure_circles = circle_check_results.circles();
     let points = [
         sphere_intersect_results.single_points(),
         circle_check_results.points(),
@@ -247,77 +246,6 @@ fn brute_force(
     match p {
         ControlFlow::Continue(_) => None,
         ControlFlow::Break(point) => Some(point),
-    }
-}
-
-fn try_get_single_point(
-    origin: Point3<f64>,
-    dist: f64,
-    kdtree: &ImmutableKdTree<f64, 3>,
-) -> Option<Point3<f64>> {
-    let init_direction: UnitVector3<f64> = Vector3::z_axis();
-    let mut step_angle = FRAC_PI_2;
-    let mut p: Option<Point3<f64>> = None;
-    let max_iteration: u32 = 1;
-    let mut counter: u32 = 0;
-    let reference_point = origin + init_direction.scale(dist);
-    while counter < max_iteration {
-        if let Some(point) =
-            recursive_search(origin, init_direction, dist, kdtree, reference_point, true)
-        {
-            p = Some(point);
-            break;
-        } else {
-            dbg!(counter);
-            step_angle /= 2.0;
-            counter += 1;
-        }
-    }
-    // #[cfg(debug_assertions)]
-    // {
-    dbg!(counter);
-    // }
-    p
-}
-
-fn recursive_search(
-    origin: Point3<f64>,
-    direction: UnitVector3<f64>,
-    dist: f64,
-    kdtree: &ImmutableKdTree<f64, 3>,
-    reference_point: Point3<f64>,
-    init: bool,
-) -> Option<Point3<f64>> {
-    if let FloatOrdering::Less = approx_cmp_f64(direction.z, 0.0) {
-        return None;
-    }
-    let new_point = origin + direction.scale(dist);
-    let cmp = approx_eq_point_f64(new_point, reference_point);
-    let is_same = match cmp {
-        FloatEq::NotEq => false,
-        FloatEq::Eq => true,
-    };
-    if !init && is_same {
-        dbg!("same");
-        return None;
-    }
-    if kdtree
-        .within::<SquaredEuclidean>(&new_point.into(), (dist + 10_f64 * EPSILON).powi(2))
-        .iter()
-        .any(|nb| {
-            matches!(
-                approx_cmp_f64(nb.distance, dist.powi(2)),
-                FloatOrdering::Less
-            )
-        })
-    {
-        None
-    } else {
-        #[cfg(debug_assertions)]
-        {
-            dbg!("Yes");
-        }
-        Some(new_point)
     }
 }
 
