@@ -16,24 +16,30 @@ pub fn export_all<T: UnitCellParameters>(
     results: &SearchReports,
 ) -> Result<(), IoError> {
     if let Some(multi_points) = results.points() {
-        let boundary_checked: Vec<MultiCoordPoint> = boundary_check(multi_points, cell_param);
+        let boundary_checked: Vec<MultiCoordPoint> =
+            points_boundary_check(multi_points, cell_param);
         export(base_model, cell_param, task_config, &boundary_checked)?;
         collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
     }
     if let Some(single_points) = results.viable_single_points() {
-        let boundary_checked: Vec<DelegatePoint> = boundary_check(single_points, cell_param);
+        let boundary_checked: Vec<DelegatePoint<1>> =
+            points_boundary_check(single_points, cell_param);
         export(base_model, cell_param, task_config, &boundary_checked)?;
         collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
     }
     if let Some(double_points) = results.viable_double_points() {
-        let boundary_checked: Vec<DelegatePoint> = boundary_check(single_points, cell_param);
+        let boundary_checked: Vec<DelegatePoint<2>> =
+            points_boundary_check(double_points, cell_param);
         export(base_model, cell_param, task_config, &boundary_checked)?;
         collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
     }
     Ok(())
 }
 
-fn boundary_check<T: Visualize, U: UnitCellParameters>(points: &[T], cell_param: &U) -> Vec<T> {
+fn points_boundary_check<T: Visualize + Clone, U: UnitCellParameters>(
+    points: &[T],
+    cell_param: &U,
+) -> Vec<T> {
     points
         .iter()
         .filter(|cp| {
