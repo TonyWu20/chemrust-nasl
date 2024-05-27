@@ -2,7 +2,7 @@ use std::f64::consts::FRAC_PI_2;
 
 use castep_periodic_table::element::ElementSymbol;
 use chemrust_core::data::geom::coordinates::CoordData;
-use nalgebra::{Matrix3, Point3, UnitVector3, Vector3};
+use nalgebra::{Matrix3, Point3, Vector3};
 
 use crate::DelegatePoint;
 
