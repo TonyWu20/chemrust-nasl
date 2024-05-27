@@ -1,13 +1,10 @@
 use std::{
-    f64::{
-        consts::{FRAC_PI_2, FRAC_PI_8},
-        EPSILON,
-    },
+    f64::{consts::FRAC_PI_8, EPSILON},
     ops::ControlFlow,
 };
 
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use nalgebra::{Point3, UnitVector3, Vector3};
+use nalgebra::{Point3, Vector3};
 use rayon::prelude::*;
 
 use self::{
@@ -16,10 +13,9 @@ use self::{
 };
 
 use crate::{
-    approx_eq_point_f64,
     coordination_sites::{CoordCircle, MultiCoordPoint},
     geometry::{approx_cmp_f64, FloatOrdering},
-    DelegatePoint, FloatEq, Visualize,
+    DelegatePoint, Visualize,
 };
 
 mod circle_check;
