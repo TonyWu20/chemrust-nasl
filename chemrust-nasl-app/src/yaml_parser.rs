@@ -34,7 +34,7 @@ impl TaskTable {
     }
 
     pub fn new_element(&self) -> &Element {
-        ELEMENT_TABLE.get_by_symbol(self.new_element).unwrap()
+        ELEMENT_TABLE.get_by_symbol(self.new_element)
     }
 
     pub fn target_bondlength(&self) -> f64 {

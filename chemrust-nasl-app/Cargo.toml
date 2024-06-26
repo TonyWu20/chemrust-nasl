@@ -1,18 +1,18 @@
 [package]
 name = "chemrust-nasl-app"
-version = "0.1.1"
+version = "0.1.0"
 edition = "2021"
 authors = ["TonyWu20"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-castep-cell-io = "0.1.5"
-castep-periodic-table = "0.4"
+castep-cell-io = "0.2.4"
+castep-periodic-table = "0.5.1"
 chemrust-nasl = {path = "../chemrust-nasl"}
 clap = {version = "4", features = ["derive"]}
 inquire = "0.7.5"
 serde_yaml = "0.9.34"
 serde = {version = "1.0", features = ["derive"]}
-chemrust-core = {git = "https://github.com/TonyWu20/chemrust", branch = "refactor"}
-nalgebra = "0.32"
+chemrust-core = "0.3.5"
+nalgebra = "0.33"

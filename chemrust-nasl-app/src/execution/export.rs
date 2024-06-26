@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::{fs::create_dir, io::Error as IoError};
 
 use castep_cell_io::{CellDocument, IonicPosition};
-use chemrust_core::data::lattice::cell_param::UnitCellParameters;
+use chemrust_core::data::lattice::UnitCellParameters;
 use chemrust_nasl::{CoordSite, DelegatePoint, MultiCoordPoint, SearchReports, Visualize};
 
 use crate::yaml_parser::TaskTable;
@@ -43,7 +43,7 @@ fn points_boundary_check<T: Visualize + Clone, U: UnitCellParameters>(
     points
         .iter()
         .filter(|cp| {
-            let frac_coord = cp.fractional_coord(cell_param.cell_tensor());
+            let frac_coord = cp.fractional_coord(cell_param.lattice_bases());
             let check = frac_coord.iter().try_for_each(|&v| {
                 if !(0.0..=1.0).contains(&v) {
                     ControlFlow::Break(())
@@ -79,13 +79,17 @@ fn export<T: CoordSite + Visualize, U: UnitCellParameters>(
     coord_sites.iter().try_for_each(|site| {
         let filename = export_filename(site, task_config);
         let mut new_model = base_model.clone();
-        let new_pos_coordinate = site.fractional_coord(cell_param.cell_tensor());
+        let new_pos_coordinate = site.fractional_coord(cell_param.lattice_bases());
         let new_pos = IonicPosition::new(
             task_config.new_element().symbol(),
             new_pos_coordinate.into(),
             None,
         );
-        new_model.append_position(new_pos);
+        new_model
+            .model_description_mut()
+            .ionic_pos_block_mut()
+            .positions_mut()
+            .push(new_pos);
         new_model.write_out(filename)
     })
 }
@@ -102,10 +106,14 @@ fn collectively_export<T: CoordSite + Visualize + Debug, U: UnitCellParameters>(
     }
     let mut new_model = base_model.clone();
     coord_sites.iter().for_each(|site| {
-        let new_pos_coordinate = site.fractional_coord(cell_param.cell_tensor());
+        let new_pos_coordinate = site.fractional_coord(cell_param.lattice_bases());
         let symbol = site.element_by_cn_number();
         let new_pos = IonicPosition::new(symbol, new_pos_coordinate.into(), None);
-        new_model.append_position(new_pos);
+        new_model
+            .model_description_mut()
+            .ionic_pos_block_mut()
+            .positions_mut()
+            .push(new_pos);
     });
     let model_name = Path::new(task_config.model_path())
         .file_stem()

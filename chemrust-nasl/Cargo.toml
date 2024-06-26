@@ -14,10 +14,10 @@ keywords = ["chemistry", "chemistry_research", "catalysis_research", "geometry"]
 
 [dependencies]
 chemrust-core = {git = "https://github.com/TonyWu20/chemrust", branch = "refactor"}
-nalgebra = "0.32"
+nalgebra = "0.33"
 kiddo = "4.2"
-castep-periodic-table = "0.4"
+castep-periodic-table = "0.5.1"
 rayon = "1.10"
 
 [dev-dependencies]
-castep-cell-io = "0.1"
+castep-cell-io = "0.2.4"

@@ -1,8 +1,14 @@
 use std::{error::Error, fmt::Display, path::Path};
 
+use castep_cell_io::CellDocument;
+
 #[derive(Debug, Clone, Copy)]
 pub enum AcceptFormat {
     Cell,
+}
+
+pub enum ModelFormat {
+    Cell(CellDocument),
 }
 
 #[derive(Debug, Clone, Copy)]

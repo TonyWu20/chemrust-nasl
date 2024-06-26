@@ -1,11 +1,11 @@
+use chemrust_core::data::{
+    atom::CoreAtomData,
+    lattice::{CrystalModel, UnitCellParameters},
+};
 use std::{error::Error, fs::read_to_string};
 
 use castep_cell_io::CellParser;
-use chemrust_core::data::{
-    atom::CoreAtomData,
-    geom::coordinates::CoordData,
-    lattice::{cell_param::UnitCellParameters, CrystalModel},
-};
+use chemrust_core::data::geom::coordinates::CoordData;
 use chemrust_nasl::{search_sites, SearchConfig, SearchReports, SiteIndex};
 use nalgebra::Point3;
 
@@ -13,6 +13,7 @@ use crate::{error::RunError, yaml_parser::TaskTable};
 
 use self::{
     export::export_all,
+    format_identify::ModelFormat,
     format_loader::load_cell_file,
     helpers::{boundary_check, get_to_check_atom, load_model},
 };
@@ -23,7 +24,7 @@ mod format_loader;
 mod helpers;
 
 pub fn search(task_config: &TaskTable) -> Result<SearchReports, Box<dyn Error>> {
-    let model = load_model(&task_config.model_path())?;
+    let ModelFormat::Cell(model) = load_model(&task_config.model_path())?;
     let to_check = get_to_check_atom(
         &model,
         task_config.x_range(),
@@ -32,12 +33,12 @@ pub fn search(task_config: &TaskTable) -> Result<SearchReports, Box<dyn Error>> 
     );
     let points: Vec<Point3<f64>> = model
         .get_atom_data()
-        .coords()
+        .coords_repr()
         .iter()
         .map(|cd| match cd {
             CoordData::Fractional(frac) => {
                 let point = frac.map(boundary_check);
-                model.get_cell_parameters().cell_tensor() * point
+                model.get_cell_parameters().lattice_bases() * point
             }
             // Todo: boundary check for cartesian coordinates
             CoordData::Cartesian(p) => *p,
@@ -63,7 +64,7 @@ pub fn export_results_in_cell(
     search_results: &SearchReports,
 ) -> Result<(), Box<dyn Error>> {
     let content = read_to_string(&task_config.model_path)?;
-    let base_model = CellParser::from(content.as_str()).parse()?;
+    let base_model = CellParser::from(&content).parse()?;
     let cell = load_cell_file(&task_config.model_path)?;
     let cell_param = cell.get_cell_parameters();
     export_all(&base_model, cell_param, task_config, search_results)?;
