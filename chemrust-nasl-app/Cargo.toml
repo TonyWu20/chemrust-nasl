@@ -9,7 +9,7 @@ authors = ["TonyWu20"]
 [dependencies]
 castep-cell-io = "0.2.4"
 castep-periodic-table = "0.5.1"
-chemrust-nasl = {path = "../chemrust-nasl"}
+chemrust-nasl = {path = "../chemrust-nasl", version = "0.1.0"}
 clap = {version = "4", features = ["derive"]}
 inquire = "0.7.5"
 serde_yaml = "0.9.34"
