@@ -13,7 +13,7 @@ impl FilePathCompleter {
         if input == self.input {
             return Ok(());
         }
-        self.input = input.to_owned();
+        input.clone_into(&mut self.input);
         self.paths.clear();
         let input_path = std::path::PathBuf::from(input);
         let fallback_parent = input_path
