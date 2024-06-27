@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::fs::create_dir_all;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::{fs::create_dir, io::Error as IoError};
@@ -74,7 +75,7 @@ fn export<T: CoordSite + Visualize, U: UnitCellParameters>(
 ) -> Result<(), IoError> {
     let export_dir_path = Path::new(task_config.export_dir());
     if !export_dir_path.exists() {
-        create_dir(export_dir_path)?;
+        create_dir_all(export_dir_path)?;
     }
     coord_sites.iter().try_for_each(|site| {
         let filename = export_filename(site, task_config);

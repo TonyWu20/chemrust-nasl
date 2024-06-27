@@ -32,8 +32,8 @@ pub fn load_model<P: AsRef<Path>>(model_path: &P) -> Result<ModelFormat, Box<dyn
     }
 }
 
-pub fn get_to_check_atom(
-    model: &impl CrystalModel,
+pub fn get_to_check_atom<T: CrystalModel>(
+    model: &T,
     x_range: FractionalCoordRange,
     y_range: FractionalCoordRange,
     z_range: FractionalCoordRange,
