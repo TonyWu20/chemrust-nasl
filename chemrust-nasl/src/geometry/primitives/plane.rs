@@ -1,5 +1,3 @@
-use std::f64::EPSILON;
-
 use nalgebra::{Point3, UnitVector3, Vector3};
 
 #[derive(Debug, Clone, Copy)]
@@ -31,8 +29,8 @@ impl Plane {
     }
     pub fn point_in_plane(&self, point: Point3<f64>) -> bool {
         let op = point - Point3::origin();
-        // Original EPSILON seems to be too strict
-        (self.normal.dot(&op) + self.d).abs() < EPSILON * 5.0
+        // Original f64::EPSILON seems to be too strict
+        (self.normal.dot(&op) + self.d).abs() < f64::EPSILON * 5.0
     }
 }
 

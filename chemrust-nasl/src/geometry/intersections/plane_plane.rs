@@ -1,4 +1,3 @@
-use std::f64::EPSILON;
 
 use nalgebra::{Point3, UnitVector3};
 
@@ -20,7 +19,7 @@ impl Intersect for Plane {
         let n1 = self.normal();
         let n2 = rhs.normal();
         let n3 = n1.cross(&n2);
-        if n3.norm_squared() < EPSILON {
+        if n3.norm_squared() < f64::EPSILON {
             let d1 = self.d();
             let d2 = self.d();
             if let FloatOrdering::Equal = approx_cmp_f64(d1, d2) {

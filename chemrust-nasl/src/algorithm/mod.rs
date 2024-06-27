@@ -1,7 +1,4 @@
-use std::{
-    f64::{consts::FRAC_PI_8, EPSILON},
-    ops::ControlFlow,
-};
+use std::{f64::consts::FRAC_PI_8, ops::ControlFlow};
 
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use nalgebra::{Point3, Vector3};
@@ -225,7 +222,7 @@ fn brute_force(
     let p = candidates.iter().try_for_each(|dir| {
         let p = origin + dir;
         if kdtree
-            .within::<SquaredEuclidean>(&p.into(), (dist + 10_f64 * EPSILON).powi(2))
+            .within::<SquaredEuclidean>(&p.into(), (dist + 10_f64 * f64::EPSILON).powi(2))
             .iter()
             .any(|nb| {
                 matches!(

@@ -15,9 +15,6 @@ impl MultiCoordPoint {
     pub fn new(point: Point3<f64>, atom_ids: Vec<usize>) -> Self {
         Self { point, atom_ids }
     }
-    pub(crate) fn cn(&self) -> usize {
-        self.atom_ids.len()
-    }
     pub(crate) fn merge_with(&self, rhs: &Self) -> Option<MultiCoordPoint> {
         if let FloatEq::Eq = approx_eq_point_f64(self.point, rhs.point) {
             let new_connecting_atoms = [self.atom_ids.clone(), rhs.atom_ids.clone()].to_vec();

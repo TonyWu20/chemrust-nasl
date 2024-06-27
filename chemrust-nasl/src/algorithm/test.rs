@@ -1,54 +1,21 @@
 use std::{fs::read_to_string, path::Path};
 
-use castep_cell_io::{CellDocument, CellParser, LatticeParam};
+use castep_cell_io::{CellDocument, CellParser};
 
 use chemrust_core::data::{
-    atom::{Atoms, CoreAtomData},
+    atom::CoreAtomData,
     geom::coordinates::CoordData,
-    lattice::{
-        cell_param::{LatticeVectors, UnitCellParameters},
-        CrystalModel, LatticeCell,
-    },
+    lattice::{CrystalModel, UnitCellParameters},
 };
-use nalgebra::{Matrix3, Point3, Vector3};
+use nalgebra::{Point3, Vector3};
 
 use crate::{search_sites, SearchConfig, SearchReports, SiteIndex};
 
-fn load_model(model_rel_path: &str) -> Option<LatticeCell> {
+fn load_model(model_rel_path: &str) -> Option<CellDocument> {
     let root_dir = env!("CARGO_MANIFEST_DIR");
     let cell_path = Path::new(root_dir).join(model_rel_path);
     let content = read_to_string(cell_path).unwrap();
-    let cell_model: CellDocument = CellParser::from(content.as_str()).parse().unwrap();
-    let lattice_param_block = cell_model.lattice();
-    let mut indices = Vec::new();
-    let mut symbols = Vec::new();
-    let mut coordinates = Vec::new();
-    let mut labels = Vec::new();
-    if let LatticeParam::LatticeCart(lat_cart) = lattice_param_block.parameter() {
-        let data = [
-            lat_cart.a().to_vec(),
-            lat_cart.b().to_vec(),
-            lat_cart.c().to_vec(),
-        ];
-        let lattice_vec = LatticeVectors::new(Matrix3::from_vec(data.concat()));
-        cell_model
-            .ionic_positions()
-            .positions()
-            .iter()
-            .enumerate()
-            .for_each(|(id, pos)| {
-                indices.push(id);
-                symbols.push(pos.symbol());
-
-                coordinates.push(CoordData::Fractional(Point3::from(pos.coordinate())));
-                labels.push(None);
-            });
-        let atoms = Atoms::new(indices, symbols, coordinates, labels);
-        let model = LatticeCell::new(lattice_vec, atoms);
-        Some(model)
-    } else {
-        None
-    }
+    CellParser::from(&content).parse().ok()
 }
 
 #[test]
@@ -56,11 +23,11 @@ fn new_algo() {
     let model = load_model("../scanner_test_models/H2TP001.cell").unwrap();
     let cartesian_coords: Vec<Point3<f64>> = model
         .get_atom_data()
-        .coords()
+        .coords_repr()
         .iter()
         .map(|cd| match cd {
             CoordData::Fractional(frac) => {
-                model.get_cell_parameters().cell_tensor()
+                model.get_cell_parameters().lattice_bases()
                     * frac.map(|v| {
                         if !(0.0..=1.0).contains(&v) {
                             v - v.floor()
@@ -72,8 +39,8 @@ fn new_algo() {
             CoordData::Cartesian(cart) => *cart,
         })
         .collect();
-    let dist = 1.95164_f64;
-    let site_index = SiteIndex::new(cartesian_coords);
+    let _dist = 1.95164_f64;
+    let _site_index = SiteIndex::new(cartesian_coords);
     todo!()
 }
 
@@ -83,11 +50,11 @@ fn test_search() {
     let lattice_vec = model.get_cell_parameters();
     let points: Vec<Point3<f64>> = model
         .get_atom_data()
-        .coords()
+        .coords_repr()
         .iter()
         .map(|cd| match cd {
             CoordData::Fractional(frac) => {
-                lattice_vec.cell_tensor()
+                lattice_vec.lattice_bases()
                     * frac.map(|v| {
                         if !(0.0..=1.0).contains(&v) {
                             v - v.floor()

@@ -1,4 +1,3 @@
-use std::f64::EPSILON;
 
 use nalgebra::{Point3, UnitVector3};
 
@@ -27,9 +26,9 @@ impl<'a> SphereSphereRelationship<'a> {
     /// returns (larger, smaller)
     /// if the two spheres are considered to be identical, returns the first as the larger
     fn cmp_sphere(s1: &'a Sphere, s2: &'a Sphere) -> (&'a Sphere, &'a Sphere) {
-        if s1.radius() - s2.radius() > 5.0 * EPSILON {
+        if s1.radius() - s2.radius() > 5.0 * f64::EPSILON {
             (s1, s2)
-        } else if s1.radius() - s2.radius() < -5.0 * EPSILON {
+        } else if s1.radius() - s2.radius() < -5.0 * f64::EPSILON {
             (s2, s1)
         } else {
             (s1, s2)
@@ -129,7 +128,7 @@ impl Intersect for Sphere {
 #[cfg(test)]
 mod test {
 
-    use std::f64::EPSILON;
+    
 
     use nalgebra::Point3;
 
@@ -143,9 +142,9 @@ mod test {
         let s1 = Sphere::new(Point3::origin(), 2.0); // at origin, r = 2
         let s2 = Sphere::new(Point3::new(1.0, 1.0, 0.0), 2.0); // normal intersects with s1
         let s3 = Sphere::new(Point3::new(1.0, 0.0, 0.0), 1.0); // inside touches s1 at (2.0,0.0,0.0)
-        let s4 = Sphere::new(Point3::origin(), 2.0 + EPSILON); // overlaps with s1
-        let s5 = Sphere::new(Point3::new(0.0, 4.0, 0.0), 2.0 + EPSILON); // outside touches s1 (2.0,0.0,0.0)
-        let s6 = Sphere::new(Point3::new(4.0, 0.0, 0.0), 1.999 + EPSILON); // outside empty with s1
+        let s4 = Sphere::new(Point3::origin(), 2.0 + f64::EPSILON); // overlaps with s1
+        let s5 = Sphere::new(Point3::new(0.0, 4.0, 0.0), 2.0 + f64::EPSILON); // outside touches s1 (2.0,0.0,0.0)
+        let s6 = Sphere::new(Point3::new(4.0, 0.0, 0.0), 1.999 + f64::EPSILON); // outside empty with s1
         let s7 = Sphere::new(Point3::new(0.0, 0.0, 0.0), 1.0); // inside empty with s1
         let s8 = Sphere::new(Point3::new(2.0, 2.0, 2.0), 3.0);
         let pairs = [s2, s3, s4, s5, s6, s7, s8];
