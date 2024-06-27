@@ -2,6 +2,7 @@
 use std::{error::Error, fs};
 
 use arg_parser::ProgramMode;
+use chemrust_nasl::SearchReports;
 use clap::Parser;
 use interactive_ui::RunOptions;
 
@@ -28,15 +29,32 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn report(results: &SearchReports) {
+    println!(
+        "Found {} multi-coordinated positions;",
+        results.points().map(|v| v.len()).unwrap_or_default()
+    );
+    println!(
+        "Found {} possible doubly-coordinated positions;",
+        results.viable_double_points().map(|v| v.len()).unwrap_or(0)
+    );
+    println!(
+        "Found {} possible doubly-coordinated positions;",
+        results.viable_single_points().map(|v| v.len()).unwrap_or(0)
+    );
+}
+
 fn run_by_config(yaml_config_path: Option<String>) -> Result<(), Box<dyn Error>> {
     let filepath = yaml_config_path.unwrap_or("config.yaml".to_string());
     let yaml_table = TaskTable::load_task_table(filepath)?;
     let results = search(&yaml_table)?;
+    report(&results);
+    export_results_in_cell(&yaml_table, &results)?;
     println!(
-        "Successful. Results have been written to {}",
-        yaml_table.export_dir()
+        "Results have been written to {}",
+        yaml_table.export_dir().display()
     );
-    export_results_in_cell(&yaml_table, &results)
+    Ok(())
 }
 
 fn interactive_cli() -> Result<(), Box<dyn Error>> {
@@ -44,16 +62,23 @@ fn interactive_cli() -> Result<(), Box<dyn Error>> {
     let run_options = RunOptions::new().unwrap();
     let yaml_table = run_options.export_config()?;
     let results = search(&yaml_table)?;
-    println!(
-        "Successful. Results have been written to {}",
-        yaml_table.export_dir()
-    );
+    report(&results);
     export_results_in_cell(&yaml_table, &results)?;
-    let export_table_filename = format!(
-        "{}/{}.yaml",
-        yaml_table.export_dir(),
-        yaml_table.export_dir()
+    let export_table_filename = yaml_table.export_dir().join(
+        yaml_table
+            .export_dir()
+            .file_name()
+            .expect("ends with '..'")
+            .to_str()
+            .expect("Invalid Unicode"),
     );
-    fs::write(export_table_filename, serde_yaml::to_string(&yaml_table)?)?;
+    println!(
+        "Results have been written to {}",
+        yaml_table.export_dir().display()
+    );
+    fs::write(
+        format!("{}.yaml", export_table_filename.display()),
+        serde_yaml::to_string(&yaml_table)?,
+    )?;
     Ok(())
 }

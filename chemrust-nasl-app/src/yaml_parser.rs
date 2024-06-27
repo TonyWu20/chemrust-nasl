@@ -1,4 +1,7 @@
-use std::{error::Error, path::Path};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+};
 
 use castep_periodic_table::{
     data::ELEMENT_TABLE,
@@ -16,7 +19,7 @@ pub struct TaskTable {
     pub(crate) x_range: (f64, f64),
     pub(crate) y_range: (f64, f64),
     pub(crate) z_range: (f64, f64),
-    pub(crate) export_dir: String,
+    pub(crate) export_dir: PathBuf,
     pub(crate) potential_dir: Option<String>,
     pub(crate) kpoint_quality: KPointQuality,
     pub(crate) edft: bool,
@@ -41,8 +44,8 @@ impl TaskTable {
         self.target_bondlength
     }
 
-    pub fn export_dir(&self) -> &str {
-        self.export_dir.as_ref()
+    pub fn export_dir(&self) -> &PathBuf {
+        &self.export_dir
     }
 
     pub fn kpoint_quality(&self) -> &KPointQuality {
@@ -74,10 +77,18 @@ mod test {
     #[test]
     fn test_task_table() {
         let table_path = "example_task.yaml";
-        let task_table = TaskTable::load_task_table(table_path).unwrap();
+        let task_table = TaskTable::load_task_table(table_path).expect("Path not found");
         println!("{}", task_table.model_path());
         println!("{}", task_table.kpoint_quality());
         println!("{:#?}", task_table.x_range());
-        println!("{}", serde_yaml::to_string(&task_table).unwrap());
+        println!(
+            "{}",
+            task_table
+                .export_dir()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+        );
     }
 }

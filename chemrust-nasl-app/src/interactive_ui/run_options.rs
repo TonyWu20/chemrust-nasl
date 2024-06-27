@@ -85,7 +85,7 @@ impl RunOptions {
             .unwrap()
             .to_str()
             .unwrap();
-        let new_element = self.new_element().symbol().into();
+        let new_element = self.new_element().symbol();
         let target_bondlength = self.target_bondlength();
         let export_options =
             ExportOptions::new(&self.new_element, self.target_bondlength(), model_seedname)?;
@@ -96,7 +96,7 @@ impl RunOptions {
             x_range: (self.x_range.min(), self.x_range.max()),
             y_range: (self.y_range.min(), self.y_range.max()),
             z_range: (self.z_range.min(), self.z_range.max()),
-            export_dir: export_options.export_dir().to_string(),
+            export_dir: export_options.export_dir().into(),
             potential_dir: Some(export_options.potential_dir().into()),
             kpoint_quality: export_options.kpoint_quality().clone(),
             edft: export_options.edft(),
