@@ -2,7 +2,7 @@ use chemrust_core::data::lattice::CrystalModel;
 use std::{error::Error, fs::read_to_string};
 
 use castep_cell_io::CellParser;
-use chemrust_nasl::{search_sites, SearchConfig, SearchReports, SiteIndex};
+use chemrust_nasl::{AdsSiteLocator, SearchConfig, SearchReports, SiteIndex};
 use nalgebra::Point3;
 
 use crate::{error::RunError, supportive_data::FractionalCoordRange, yaml_parser::TaskTable};
@@ -32,8 +32,9 @@ pub fn search_with_length<T: CrystalModel>(
         .collect();
     let site_index = SiteIndex::new(all_points);
     let search_config = SearchConfig::new(&to_check, bondlength);
+    let locator = AdsSiteLocator::new(&site_index, &search_config);
 
-    let search_report = search_sites(&site_index, &search_config);
+    let search_report = locator.search_sites();
     if search_report.viable_single_points().is_none()
         && search_report.viable_double_points().is_none()
         && search_report.points().is_none()
