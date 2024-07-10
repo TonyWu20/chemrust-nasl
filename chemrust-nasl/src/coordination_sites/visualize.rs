@@ -18,6 +18,7 @@ pub trait Visualize {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Atom {
     symbol: ElementSymbol,
     coord: CoordData,

@@ -1,6 +1,6 @@
 [package]
 name = "chemrust-nasl"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["TonyWu20"]
 readme = "../README.md"
@@ -21,4 +21,4 @@ castep-periodic-table = "0.5.1"
 rayon = "1.10"
 
 [dev-dependencies]
-castep-cell-io = "0.2.4"
+castep-cell-io = "0.2.7"

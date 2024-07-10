@@ -9,39 +9,13 @@ use chemrust_core::data::{
 };
 use nalgebra::{Point3, Vector3};
 
-use crate::{search_sites, SearchConfig, SearchReports, SiteIndex};
+use crate::{AdsSiteLocator, SearchConfig, SearchReports, SiteIndex};
 
 fn load_model(model_rel_path: &str) -> Option<CellDocument> {
     let root_dir = env!("CARGO_MANIFEST_DIR");
     let cell_path = Path::new(root_dir).join(model_rel_path);
     let content = read_to_string(cell_path).unwrap();
     CellParser::from(&content).parse().ok()
-}
-
-#[test]
-fn new_algo() {
-    let model = load_model("../scanner_test_models/H2TP001.cell").unwrap();
-    let cartesian_coords: Vec<Point3<f64>> = model
-        .get_atom_data()
-        .coords_repr()
-        .iter()
-        .map(|cd| match cd {
-            CoordData::Fractional(frac) => {
-                model.get_cell_parameters().lattice_bases()
-                    * frac.map(|v| {
-                        if !(0.0..=1.0).contains(&v) {
-                            v - v.floor()
-                        } else {
-                            v
-                        }
-                    })
-            }
-            CoordData::Cartesian(cart) => *cart,
-        })
-        .collect();
-    let _dist = 1.95164_f64;
-    let _site_index = SiteIndex::new(cartesian_coords);
-    todo!()
 }
 
 #[test]
@@ -75,7 +49,8 @@ fn test_search() {
         .map(|(i, p)| (i, *p))
         .collect();
     let search_config = SearchConfig::new(&search_points, dist);
-    let results: SearchReports = search_sites(&site_index, &search_config);
+    let searcher = AdsSiteLocator::new(&site_index, &search_config);
+    let results: SearchReports = searcher.search_sites();
     results
         .points()
         .unwrap()
