@@ -39,7 +39,7 @@ fn report(results: &SearchReports) {
         results.viable_double_points().map(|v| v.len()).unwrap_or(0)
     );
     println!(
-        "Found {} possible doubly-coordinated positions;",
+        "Found {} possible singly-coordinated positions;",
         results.viable_single_points().map(|v| v.len()).unwrap_or(0)
     );
 }

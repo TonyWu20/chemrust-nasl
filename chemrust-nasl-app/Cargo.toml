@@ -22,3 +22,4 @@ serde_yaml = "0.9.34"
 serde = {version = "1.0", features = ["derive"]}
 chemrust-core = "0.3.5"
 nalgebra = "0.33"
+crystal-cif-io = {git = "https://github.com/TonyWu20/crystal-cif-io", branch = "dev", features = ["chemrust-core"]}

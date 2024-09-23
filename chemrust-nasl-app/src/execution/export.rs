@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, write};
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::{fs::create_dir, io::Error as IoError};
@@ -7,6 +7,7 @@ use std::{fs::create_dir, io::Error as IoError};
 use castep_cell_io::{CellDocument, IonicPosition};
 use chemrust_core::data::lattice::UnitCellParameters;
 use chemrust_nasl::{CoordSite, DelegatePoint, MultiCoordPoint, SearchReports, Visualize};
+use crystal_cif_io::to_cif_document;
 
 use crate::yaml_parser::TaskTable;
 
@@ -91,7 +92,10 @@ fn export<T: CoordSite + Visualize, U: UnitCellParameters>(
             .ionic_pos_block_mut()
             .positions_mut()
             .push(new_pos);
-        new_model.write_out(filename)
+        let cif_file = to_cif_document(&new_model, filename.file_stem().unwrap().to_str().unwrap());
+        let cif_filename = filename.with_extension("cif");
+        new_model.write_out(filename)?;
+        write(cif_filename, cif_file.to_string())
     })
 }
 
