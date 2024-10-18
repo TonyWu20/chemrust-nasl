@@ -26,6 +26,32 @@ pub struct TaskTable {
 }
 
 impl TaskTable {
+    pub fn new(
+        model_path: String,
+        new_element: ElementSymbol,
+        target_bondlength: f64,
+        x_range: (f64, f64),
+        y_range: (f64, f64),
+        z_range: (f64, f64),
+        export_dir: PathBuf,
+        potential_dir: Option<String>,
+        kpoint_quality: KPointQuality,
+        edft: bool,
+    ) -> Self {
+        Self {
+            model_path,
+            new_element,
+            target_bondlength,
+            x_range,
+            y_range,
+            z_range,
+            export_dir,
+            potential_dir,
+            kpoint_quality,
+            edft,
+        }
+    }
+
     pub fn load_task_table<P: AsRef<Path>>(filepath: P) -> Result<Self, Box<dyn Error>> {
         let table_src = std::fs::File::open(filepath)?;
         let table = serde_yaml::from_reader(table_src)?;

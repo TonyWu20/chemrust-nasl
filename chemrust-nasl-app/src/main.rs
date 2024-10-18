@@ -6,10 +6,9 @@ use chemrust_nasl::SearchReports;
 use clap::Parser;
 use interactive_ui::RunOptions;
 
-use crate::{
-    execution::{export_results_in_cell, search},
-    yaml_parser::TaskTable,
-};
+use crate::execution::{export_results_in_cell, search};
+
+pub use yaml_parser::TaskTable;
 
 mod arg_parser;
 mod error;
@@ -44,17 +43,21 @@ fn report(results: &SearchReports) {
     );
 }
 
+pub fn run_by_table(task_table: &TaskTable) -> Result<(), Box<dyn Error>> {
+    let results = search(&task_table)?;
+    report(&results);
+    export_results_in_cell(&task_table, &results)?;
+    println!(
+        "Results have been written to {}",
+        task_table.export_dir().display()
+    );
+    Ok(())
+}
+
 fn run_by_config(yaml_config_path: Option<String>) -> Result<(), Box<dyn Error>> {
     let filepath = yaml_config_path.unwrap_or("config.yaml".to_string());
     let yaml_table = TaskTable::load_task_table(filepath)?;
-    let results = search(&yaml_table)?;
-    report(&results);
-    export_results_in_cell(&yaml_table, &results)?;
-    println!(
-        "Results have been written to {}",
-        yaml_table.export_dir().display()
-    );
-    Ok(())
+    run_by_table(&yaml_table)
 }
 
 fn interactive_cli() -> Result<(), Box<dyn Error>> {
