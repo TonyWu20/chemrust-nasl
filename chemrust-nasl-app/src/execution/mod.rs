@@ -1,11 +1,15 @@
 use chemrust_core::data::lattice::CrystalModel;
-use std::{error::Error, fs::read_to_string};
+use std::fs::read_to_string;
 
 use castep_cell_io::CellParser;
 use chemrust_nasl::{AdsSiteLocator, SearchConfig, SearchReports, SiteIndex};
 use nalgebra::Point3;
 
-use crate::{error::RunError, supportive_data::FractionalCoordRange, yaml_parser::TaskTable};
+use crate::{
+    error::{FormatError, RunError},
+    supportive_data::FractionalCoordRange,
+    yaml_parser::TaskTable,
+};
 
 use self::{
     export::export_all, format_identify::match_format, format_loader::load_cell_file,
@@ -47,12 +51,12 @@ pub fn search_with_length<T: CrystalModel>(
     }
 }
 
-pub fn search(task_config: &TaskTable) -> Result<SearchReports, Box<dyn Error>> {
+pub fn search(task_config: &TaskTable) -> Result<SearchReports, RunError> {
     // let ModelFormat::Cell(model) = load_model(&task_config.model_path())?;
-    let format = match_format(&task_config.model_path())?;
+    let format = match_format(&task_config.model_path()).map_err(|f| RunError::FormatError(f))?;
     let search_report = match format {
         format_identify::AcceptFormat::Cell => search_with_length(
-            &load_cell_file(task_config.model_path())?,
+            &load_cell_file(task_config.model_path()).map_err(|f| RunError::FormatError(f))?,
             task_config.target_bondlength(),
             task_config.x_range(),
             task_config.y_range(),
@@ -65,11 +69,14 @@ pub fn search(task_config: &TaskTable) -> Result<SearchReports, Box<dyn Error>> 
 pub fn export_results_in_cell(
     task_config: &TaskTable,
     search_results: &SearchReports,
-) -> Result<(), Box<dyn Error>> {
-    let content = read_to_string(&task_config.model_path)?;
-    let base_model = CellParser::from(&content).parse()?;
-    let cell = load_cell_file(&task_config.model_path)?;
+) -> Result<(), RunError> {
+    let content = read_to_string(&task_config.model_path)
+        .map_err(|_| RunError::FormatError(FormatError::ReadToString))?;
+    let base_model = CellParser::from(&content)
+        .parse()
+        .map_err(|_| RunError::FormatError(FormatError::Compatible))?;
+    let cell = load_cell_file(&task_config.model_path).map_err(|f| RunError::FormatError(f))?;
     let cell_param = cell.get_cell_parameters();
-    export_all(&base_model, cell_param, task_config, search_results)?;
+    export_all(&base_model, cell_param, task_config, search_results).map_err(|_| RunError::IO)?;
     Ok(())
 }

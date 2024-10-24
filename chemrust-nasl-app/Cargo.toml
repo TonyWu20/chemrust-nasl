@@ -24,6 +24,10 @@ chemrust-core = "0.3.5"
 nalgebra = "0.33"
 crystal-cif-io = {git = "https://github.com/TonyWu20/crystal-cif-io", branch = "dev", features = ["chemrust-core"]}
 
+[lib]
+name="rhino_lib"
+path="src/lib.rs"
+
 [[bin]]
 name="rhino"
 path="src/main.rs"

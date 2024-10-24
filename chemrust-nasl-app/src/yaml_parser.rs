@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::{interactive_ui::KPointQuality, supportive_data::FractionalCoordRange};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+/// A config struct
 pub struct TaskTable {
     pub(crate) model_path: String,
     pub(crate) new_element: ElementSymbol,
