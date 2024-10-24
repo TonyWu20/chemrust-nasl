@@ -1,6 +1,7 @@
 use chemrust_core::data::atom::CoreAtomData;
 use kiddo::ImmutableKdTree;
 use nalgebra::Point3;
+
 fn build_kd_tree_from_points(points: &[Point3<f64>]) -> ImmutableKdTree<f64, 3> {
     let entries = points.iter().map(|&p| p.into()).collect::<Vec<[f64; 3]>>();
     ImmutableKdTree::new_from_slice(&entries)
