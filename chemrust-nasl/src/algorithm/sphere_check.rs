@@ -66,7 +66,7 @@ fn sphere_check_fn(
 ) -> CoordResult {
     let sphere = Sphere::new(query, search_config.bondlength());
     let tree = site_index.coord_tree();
-    let neighbours = tree.within_radius(&query, search_config.bondlength());
+    let neighbours = tree.within_radius(&query, search_config.bondlength() * 2.0);
     if neighbours.len() == 1 {
         CoordResult::Empty
     } else {
