@@ -1,6 +1,6 @@
 [package]
 name = "rhino"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["TonyWu20"]
 readme = "../README.md"
@@ -13,9 +13,9 @@ description = "New Adsorption Site Locator (NASL) for catalyst materials. Writte
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-castep-cell-io = "0.2.4"
+castep-cell-io = "0.2.9"
 castep-periodic-table = "0.5.1"
-chemrust-nasl = "0.2.0"
+chemrust-nasl = {path = "../chemrust-nasl"}
 clap = {version = "4", features = ["derive"]}
 inquire = "0.7.5"
 serde_yaml = "0.9.34"
