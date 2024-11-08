@@ -15,10 +15,10 @@ description = "New Adsorption Site Locator (NASL) for catalyst materials. Writte
 
 [dependencies]
 chemrust-core = "0.3.5"
-nalgebra = "0.33"
-kiddo = "4.2"
+nalgebra = "0.33.*"
+kd-tree = {git  = "https://github.com/TonyWu20/kd-tree", features=["nalgebra" ]}
 castep-periodic-table = "0.5.1"
 rayon = "1.10"
 
 [dev-dependencies]
-castep-cell-io = "0.2.7"
+castep-cell-io = "0.2.9"

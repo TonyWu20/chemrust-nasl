@@ -1,7 +1,7 @@
 use std::{collections::HashSet, ops::ControlFlow};
 
-use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use nalgebra::Point3;
+use kd_tree::KdIndexTree;
+use nalgebra::{distance_squared, Point3};
 
 use crate::geometry::{approx_cmp_f64, approx_eq_point_f64, FloatEq, FloatOrdering};
 
@@ -31,15 +31,15 @@ impl MultiCoordPoint {
 
     pub fn no_closer_atoms(
         self,
-        kdtree: &ImmutableKdTree<f64, 3>,
+        kdtree: &KdIndexTree<Point3<f64>>,
         dist: f64,
     ) -> Option<MultiCoordPoint> {
-        let query: [f64; 3] = self.point.into();
         let closer_than_dist = kdtree
-            .within::<SquaredEuclidean>(&query, dist.powi(2))
-            .into_iter()
-            .try_for_each(|nb| {
-                if let FloatOrdering::Less = approx_cmp_f64(nb.distance, dist.powi(2)) {
+            .within_radius(&self.point(), dist)
+            .iter()
+            .try_for_each(|&&nb| {
+                let distance = distance_squared(&self.point(), kdtree.item(nb));
+                if let FloatOrdering::Less = approx_cmp_f64(distance, dist.powi(2)) {
                     ControlFlow::Break(nb)
                 } else {
                     ControlFlow::Continue(())
@@ -53,7 +53,7 @@ impl MultiCoordPoint {
     }
     pub fn dedup_points(
         points: &[MultiCoordPoint],
-        kdtree: &ImmutableKdTree<f64, 3>,
+        kdtree: &KdIndexTree<Point3<f64>>,
         dist: f64,
     ) -> Vec<MultiCoordPoint> {
         let mut visited = vec![false; points.len()];
