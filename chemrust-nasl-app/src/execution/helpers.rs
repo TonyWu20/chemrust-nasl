@@ -3,14 +3,14 @@ use std::{error::Error, path::Path};
 use chemrust_core::data::{
     atom::CoreAtomData,
     geom::coordinates::CoordData,
-    lattice::{cell_param::UnitCellParameters, CrystalModel, LatticeCell},
+    lattice::{CrystalModel, UnitCellParameters},
 };
 use nalgebra::Point3;
 
 use crate::supportive_data::FractionalCoordRange;
 
 use super::{
-    format_identify::{self, match_format},
+    format_identify::{self, match_format, ModelFormat},
     format_loader::load_cell_file,
 };
 
@@ -24,23 +24,23 @@ pub fn boundary_check(v: f64) -> f64 {
         v
     }
 }
-pub fn load_model<P: AsRef<Path>>(model_path: &P) -> Result<LatticeCell, Box<dyn Error>> {
+pub fn load_model<P: AsRef<Path>>(model_path: &P) -> Result<ModelFormat, Box<dyn Error>> {
     let format = match_format(model_path)?;
 
     match format {
-        format_identify::AcceptFormat::Cell => load_cell_file(model_path),
+        format_identify::AcceptFormat::Cell => Ok(ModelFormat::Cell(load_cell_file(model_path)?)),
     }
 }
 
-pub fn get_to_check_atom(
-    model: &LatticeCell,
+pub fn get_to_check_atom<T: CrystalModel>(
+    model: &T,
     x_range: FractionalCoordRange,
     y_range: FractionalCoordRange,
     z_range: FractionalCoordRange,
 ) -> Vec<(usize, Point3<f64>)> {
     model
         .get_atom_data()
-        .coords()
+        .coords_repr()
         .iter()
         .enumerate()
         .filter_map(|(i, cd)| match cd {
@@ -50,7 +50,7 @@ pub fn get_to_check_atom(
                     && y_range.is_in_range(point.y)
                     && z_range.is_in_range(point.z)
                 {
-                    let point = model.get_cell_parameters().cell_tensor() * point;
+                    let point = model.get_cell_parameters().lattice_bases() * point;
                     Some((i, point))
                 } else {
                     None
@@ -59,7 +59,7 @@ pub fn get_to_check_atom(
             CoordData::Cartesian(cart) => {
                 let frac = model
                     .get_cell_parameters()
-                    .cell_tensor()
+                    .lattice_bases()
                     .try_inverse()
                     .unwrap()
                     * cart;
@@ -68,7 +68,7 @@ pub fn get_to_check_atom(
                     && y_range.is_in_range(point.y)
                     && z_range.is_in_range(point.z)
                 {
-                    let point = model.get_cell_parameters().cell_tensor() * point;
+                    let point = model.get_cell_parameters().lattice_bases() * point;
                     Some((i, point))
                 } else {
                     None

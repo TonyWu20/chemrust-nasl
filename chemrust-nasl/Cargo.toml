@@ -1,13 +1,14 @@
 [package]
 name = "chemrust-nasl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["TonyWu20"]
-readme = "README.md"
+readme = "../README.md"
 homepage = "https://github.com/TonyWu20/chemrust-nasl"
 repository = "https://github.com/TonyWu20/chemrust-nasl"
 license = "MIT"
 keywords = ["chemistry", "chemistry_research", "catalysis_research", "geometry"]
+description = "New Adsorption Site Locator (NASL) for catalyst materials. Written in rust. Part of the `chemrust` toolchain."
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

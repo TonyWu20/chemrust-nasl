@@ -22,4 +22,5 @@ Cargo.lock
 scanner_test_models/
 test_configs/
 demo/
-
+Potentials/
+Potentials

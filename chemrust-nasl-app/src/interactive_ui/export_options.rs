@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{env, str::FromStr};
 
 use castep_periodic_table::element::Element;
 use inquire::{Confirm, InquireError, Select, Text};
@@ -45,9 +45,9 @@ impl ExportOptions {
             .prompt()
     }
     fn ask_potential_dir() -> Result<String, InquireError> {
-        let cwd = env!("CARGO_MANIFEST_DIR");
-        let potential_loc_path = format!("{}/../Potentials", cwd);
-        Text::new("Please specify the location of castep potentials directory: ")
+        let cwd = env::current_dir().expect("Current directory does not exist or no permissions");
+        let potential_loc_path = format!("e.g.: {}/Potentials", cwd.display());
+        Text::new("Please specify the location of castep psuedopotentials directory: ")
             .with_autocomplete(FilePathCompleter::default())
             .with_default(&potential_loc_path)
             .prompt()

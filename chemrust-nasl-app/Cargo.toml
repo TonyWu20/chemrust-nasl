@@ -1,18 +1,38 @@
 [package]
-name = "chemrust-nasl-app"
-version = "0.1.1"
+name = "rhino"
+version = "0.1.0"
 edition = "2021"
 authors = ["TonyWu20"]
+readme = "../README.md"
+homepage = "https://github.com/TonyWu20/chemrust-nasl"
+repository = "https://github.com/TonyWu20/chemrust-nasl"
+license = "MIT"
+keywords = ["chemistry", "chemistry_research", "catalysis_research", "geometry"]
+description = "New Adsorption Site Locator (NASL) for catalyst materials. Written in rust. Part of the `chemrust` toolchain. This is the binary crate."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-castep-cell-io = "0.1.5"
-castep-periodic-table = "0.4"
-chemrust-nasl = {path = "../chemrust-nasl"}
+castep-cell-io = "0.2.4"
+castep-periodic-table = "0.5.1"
+chemrust-nasl = "0.2.0"
 clap = {version = "4", features = ["derive"]}
 inquire = "0.7.5"
 serde_yaml = "0.9.34"
 serde = {version = "1.0", features = ["derive"]}
-chemrust-core = {git = "https://github.com/TonyWu20/chemrust", branch = "refactor"}
-nalgebra = "0.32"
+chemrust-core = "0.3.5"
+nalgebra = "0.33"
+crystal-cif-io = {git = "https://github.com/TonyWu20/crystal-cif-io", branch = "dev", features = ["chemrust-core"]}
+
+[lib]
+name="rhino_lib"
+path="src/lib.rs"
+
+[[bin]]
+name="rhino"
+path="src/main.rs"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+[target.x86_64-unknown-linux-gnu]
+linker = "x86_64-unknown-linux-gnu-gcc"

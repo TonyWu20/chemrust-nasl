@@ -1,4 +1,7 @@
-use std::{error::Error, path::Path};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+};
 
 use castep_periodic_table::{
     data::ELEMENT_TABLE,
@@ -9,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::{interactive_ui::KPointQuality, supportive_data::FractionalCoordRange};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+/// A config struct
 pub struct TaskTable {
     pub(crate) model_path: String,
     pub(crate) new_element: ElementSymbol,
@@ -16,13 +20,39 @@ pub struct TaskTable {
     pub(crate) x_range: (f64, f64),
     pub(crate) y_range: (f64, f64),
     pub(crate) z_range: (f64, f64),
-    pub(crate) export_dir: String,
+    pub(crate) export_dir: PathBuf,
     pub(crate) potential_dir: Option<String>,
     pub(crate) kpoint_quality: KPointQuality,
     pub(crate) edft: bool,
 }
 
 impl TaskTable {
+    pub fn new(
+        model_path: String,
+        new_element: ElementSymbol,
+        target_bondlength: f64,
+        x_range: (f64, f64),
+        y_range: (f64, f64),
+        z_range: (f64, f64),
+        export_dir: PathBuf,
+        potential_dir: Option<String>,
+        kpoint_quality: KPointQuality,
+        edft: bool,
+    ) -> Self {
+        Self {
+            model_path,
+            new_element,
+            target_bondlength,
+            x_range,
+            y_range,
+            z_range,
+            export_dir,
+            potential_dir,
+            kpoint_quality,
+            edft,
+        }
+    }
+
     pub fn load_task_table<P: AsRef<Path>>(filepath: P) -> Result<Self, Box<dyn Error>> {
         let table_src = std::fs::File::open(filepath)?;
         let table = serde_yaml::from_reader(table_src)?;
@@ -34,15 +64,15 @@ impl TaskTable {
     }
 
     pub fn new_element(&self) -> &Element {
-        ELEMENT_TABLE.get_by_symbol(self.new_element).unwrap()
+        ELEMENT_TABLE.get_by_symbol(self.new_element)
     }
 
     pub fn target_bondlength(&self) -> f64 {
         self.target_bondlength
     }
 
-    pub fn export_dir(&self) -> &str {
-        self.export_dir.as_ref()
+    pub fn export_dir(&self) -> &PathBuf {
+        &self.export_dir
     }
 
     pub fn kpoint_quality(&self) -> &KPointQuality {
@@ -74,10 +104,18 @@ mod test {
     #[test]
     fn test_task_table() {
         let table_path = "example_task.yaml";
-        let task_table = TaskTable::load_task_table(table_path).unwrap();
+        let task_table = TaskTable::load_task_table(table_path).expect("Path not found");
         println!("{}", task_table.model_path());
         println!("{}", task_table.kpoint_quality());
         println!("{:#?}", task_table.x_range());
-        println!("{}", serde_yaml::to_string(&task_table).unwrap());
+        println!(
+            "{}",
+            task_table
+                .export_dir()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+        );
     }
 }

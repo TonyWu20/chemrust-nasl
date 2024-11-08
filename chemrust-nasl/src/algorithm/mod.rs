@@ -4,18 +4,18 @@ use kd_tree::KdIndexTree;
 use nalgebra::{distance_squared, Point3, Vector3};
 use rayon::prelude::*;
 
-use self::{
-    circle_check::check_circles,
-    sphere_check::{sphere_check, SphereCheckResult},
-};
+use self::sphere_check::SphereCheckResult;
 
 use crate::{
     coordination_sites::{CoordCircle, MultiCoordPoint},
     geometry::{approx_cmp_f64, FloatOrdering},
-    DelegatePoint, Visualize,
+    DelegatePoint,
 };
 
 mod circle_check;
+mod search_config;
+mod search_report;
+mod site_index;
 mod sphere_check;
 #[cfg(test)]
 mod test;
@@ -44,6 +44,29 @@ impl<'a> SearchConfig<'a> {
 }
 
 pub struct SiteIndex<'a>(KdIndexTree<'a, Point3<f64>>);
+
+#[derive(Debug, Clone, Copy)]
+pub struct SearchConfig<'a> {
+    to_check: &'a [(usize, Point3<f64>)],
+    bondlength: f64,
+}
+
+impl<'a> SearchConfig<'a> {
+    pub fn new(to_check: &'a [(usize, Point3<f64>)], bondlength: f64) -> Self {
+        Self {
+            to_check,
+            bondlength,
+        }
+    }
+
+    pub fn to_check(&self) -> &[(usize, Point3<f64>)] {
+        self.to_check
+    }
+
+    pub fn bondlength(&self) -> f64 {
+        self.bondlength
+    }
+}
 
 impl<'a> SiteIndex<'a> {
     pub fn new(coords: &'a [Point3<f64>]) -> Self {
@@ -236,7 +259,7 @@ pub fn validate_site<'a, 'b, T: Visualize>(
     let bondlength = search_config.bondlength;
     let dist = bondlength.powi(2);
     if site_index
-        .0
+        .coord_tree()
         .within_radius(&coord, bondlength)
         .iter()
         .any(|&&nb| {
