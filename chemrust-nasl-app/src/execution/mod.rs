@@ -67,7 +67,7 @@ pub fn search(task_config: &TaskTable) -> Result<SearchReports, RunError> {
 pub fn export_results_in_cell(
     task_config: &TaskTable,
     search_results: &SearchReports,
-) -> Result<(), RunError> {
+) -> Result<(usize, usize, usize), RunError> {
     let content = read_to_string(&task_config.model_path)
         .map_err(|_| RunError::FormatError(FormatError::ReadToString))?;
     let base_model = CellParser::from(&content)
@@ -75,6 +75,7 @@ pub fn export_results_in_cell(
         .map_err(|_| RunError::FormatError(FormatError::Compatible))?;
     let cell = load_cell_file(&task_config.model_path).map_err(RunError::FormatError)?;
     let cell_param = cell.get_cell_parameters();
-    export_all(&base_model, cell_param, task_config, search_results).map_err(|_| RunError::IO)?;
-    Ok(())
+    let (mul, single, double) = export_all(&base_model, cell_param, task_config, search_results)
+        .map_err(|_| RunError::IO)?;
+    Ok((mul, single, double))
 }

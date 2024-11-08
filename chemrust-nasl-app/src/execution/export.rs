@@ -16,13 +16,21 @@ pub fn export_all<T: UnitCellParameters>(
     cell_param: &T,
     task_config: &TaskTable,
     results: &SearchReports,
-) -> Result<(), IoError> {
+) -> Result<(usize, usize, usize), IoError> {
+    let mut num_multi = 0_usize;
+    let mut num_single = 0_usize;
+    let mut num_double = 0_usize;
     if let Some(multi_points) = results.points() {
         let boundary_checked: Vec<MultiCoordPoint> =
             points_boundary_check(multi_points, cell_param);
         if boundary_checked.len() > 1 {
             export(base_model, cell_param, task_config, &boundary_checked)?;
             collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
+            num_multi = boundary_checked.len();
+            println!(
+                "Exported {} multi-coordinated positions;",
+                boundary_checked.len()
+            );
         }
     }
     if let Some(single_points) = results.viable_single_points() {
@@ -31,6 +39,11 @@ pub fn export_all<T: UnitCellParameters>(
         if boundary_checked.len() > 1 {
             export(base_model, cell_param, task_config, &boundary_checked)?;
             collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
+            num_single = boundary_checked.len();
+            println!(
+                "Exported {} possible singly-coordinated positions;",
+                boundary_checked.len()
+            )
         }
     }
     if let Some(double_points) = results.viable_double_points() {
@@ -39,9 +52,14 @@ pub fn export_all<T: UnitCellParameters>(
         if boundary_checked.len() > 1 {
             export(base_model, cell_param, task_config, &boundary_checked)?;
             collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
+            num_double = boundary_checked.len();
+            println!(
+                "Exported {} possible doubly-coordinated positions;",
+                boundary_checked.len()
+            );
         }
     }
-    Ok(())
+    Ok((num_multi, num_single, num_double))
 }
 
 fn points_boundary_check<T: Visualize + Clone, U: UnitCellParameters>(

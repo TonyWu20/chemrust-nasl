@@ -20,7 +20,7 @@ fn load_model(model_rel_path: &str) -> Result<CellDocument, CellParseError> {
 
 #[test]
 fn test_search() {
-    let model = load_model("../scanner_test_models/g-C3N4.cell").unwrap();
+    let model = load_model("../scanner_test_models/MnTP.cell").unwrap();
     let lattice_vec = model.get_cell_parameters();
     let points: Vec<Point3<f64>> = model
         .get_atom_data()
@@ -45,5 +45,8 @@ fn test_search() {
     let search_points: Vec<(usize, Point3<f64>)> =
         points.iter().enumerate().map(|(i, p)| (i, *p)).collect();
     let search_config = SearchConfig::new(&search_points, dist);
-    let _results: SearchReports = search_sites(&site_index, &search_config);
+    let results: SearchReports = search_sites(&site_index, &search_config);
+    dbg!(results.viable_single_points());
+    dbg!(results.viable_double_points());
+    dbg!(results.points());
 }
