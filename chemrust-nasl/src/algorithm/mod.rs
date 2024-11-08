@@ -1,10 +1,7 @@
-use std::{
-    f64::{consts::FRAC_PI_8, EPSILON},
-    ops::ControlFlow,
-};
+use std::{f64::consts::FRAC_PI_8, ops::ControlFlow};
 
-use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use nalgebra::{Point3, Vector3};
+use kd_tree::KdIndexTree;
+use nalgebra::{distance_squared, Point3, Vector3};
 use rayon::prelude::*;
 
 use self::{
@@ -20,6 +17,8 @@ use crate::{
 
 mod circle_check;
 mod sphere_check;
+#[cfg(test)]
+mod test;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SearchConfig<'a> {
@@ -44,31 +43,16 @@ impl<'a> SearchConfig<'a> {
     }
 }
 
-#[cfg(test)]
-mod test;
+pub struct SiteIndex<'a>(KdIndexTree<'a, Point3<f64>>);
 
-fn build_kd_tree_from_points(points: &[Point3<f64>]) -> ImmutableKdTree<f64, 3> {
-    let entries = points.iter().map(|&p| p.into()).collect::<Vec<[f64; 3]>>();
-    ImmutableKdTree::new_from_slice(&entries)
-}
-
-pub struct SiteIndex {
-    coords: Vec<Point3<f64>>,
-    coord_tree: ImmutableKdTree<f64, 3>,
-}
-
-impl SiteIndex {
-    pub fn new(coords: Vec<Point3<f64>>) -> Self {
-        let coord_tree = build_kd_tree_from_points(&coords);
-        Self { coords, coord_tree }
+impl<'a> SiteIndex<'a> {
+    pub fn new(coords: &'a [Point3<f64>]) -> Self {
+        let coord_tree = KdIndexTree::build_by_ordered_float(&coords);
+        Self(coord_tree)
     }
 
-    pub fn coords(&self) -> &[Point3<f64>] {
-        self.coords.as_ref()
-    }
-
-    pub fn coord_tree(&self) -> &ImmutableKdTree<f64, 3> {
-        &self.coord_tree
+    pub fn coord_tree(&self) -> &KdIndexTree<'a, Point3<f64>> {
+        &self.0
     }
 }
 
@@ -175,7 +159,7 @@ fn search_possible_single_points(
 
 fn search_possible_double_points(
     unchecked_circles: &[CoordCircle],
-    kdtree: &ImmutableKdTree<f64, 3>,
+    kdtree: &KdIndexTree<Point3<f64>>,
     dist: f64,
 ) -> Option<Vec<DelegatePoint<2>>> {
     let results: Vec<DelegatePoint<2>> = unchecked_circles
@@ -192,7 +176,7 @@ fn search_possible_double_points(
 fn brute_force(
     origin: Point3<f64>,
     dist: f64,
-    kdtree: &ImmutableKdTree<f64, 3>,
+    kdtree: &KdIndexTree<Point3<f64>>,
 ) -> Option<Point3<f64>> {
     let step = FRAC_PI_8 / 2_f64;
     let azimuth: [f64; 32] = (0..32)
@@ -225,13 +209,11 @@ fn brute_force(
     let p = candidates.iter().try_for_each(|dir| {
         let p = origin + dir;
         if kdtree
-            .within::<SquaredEuclidean>(&p.into(), (dist + 10_f64 * EPSILON).powi(2))
+            .within_radius(&p, dist + 10_f64 * f64::EPSILON)
             .iter()
-            .any(|nb| {
-                matches!(
-                    approx_cmp_f64(nb.distance, dist.powi(2)),
-                    FloatOrdering::Less
-                )
+            .any(|&&nb| {
+                let distance = distance_squared(&p, kdtree.item(nb));
+                matches!(approx_cmp_f64(distance, dist.powi(2)), FloatOrdering::Less)
             })
         {
             ControlFlow::Continue(())
@@ -254,10 +236,13 @@ pub fn validate_site<'a, 'b, T: Visualize>(
     let bondlength = search_config.bondlength;
     let dist = bondlength.powi(2);
     if site_index
-        .coord_tree
-        .within::<SquaredEuclidean>(&coord.into(), dist)
+        .0
+        .within_radius(&coord, bondlength)
         .iter()
-        .any(|nb| matches!(approx_cmp_f64(nb.distance, dist), FloatOrdering::Less))
+        .any(|&&nb| {
+            let distance = distance_squared(&coord, site_index.0.item(nb));
+            matches!(approx_cmp_f64(distance, dist), FloatOrdering::Less)
+        })
     {
         None
     } else {

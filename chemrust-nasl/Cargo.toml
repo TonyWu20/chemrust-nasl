@@ -13,11 +13,11 @@ keywords = ["chemistry", "chemistry_research", "catalysis_research", "geometry"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chemrust-core = {git = "https://github.com/TonyWu20/chemrust", branch = "refactor"}
-nalgebra = "0.32"
-kiddo = "4.2"
-castep-periodic-table = "0.4"
+chemrust-core = "0.3.5"
+nalgebra = "0.33.*"
+kd-tree = {git  = "https://github.com/TonyWu20/kd-tree", features=["nalgebra" ]}
+castep-periodic-table = "0.5.1"
 rayon = "1.10"
 
 [dev-dependencies]
-castep-cell-io = "0.1"
+castep-cell-io = "0.2.9"
