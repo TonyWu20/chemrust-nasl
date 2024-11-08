@@ -47,7 +47,7 @@ pub struct SiteIndex<'a>(KdIndexTree<'a, Point3<f64>>);
 
 impl<'a> SiteIndex<'a> {
     pub fn new(coords: &'a [Point3<f64>]) -> Self {
-        let coord_tree = KdIndexTree::build_by_ordered_float(&coords);
+        let coord_tree = KdIndexTree::build_by_ordered_float(coords);
         Self(coord_tree)
     }
 
