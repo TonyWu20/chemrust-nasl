@@ -30,7 +30,7 @@ pub fn check_circles(
     search_config: &SearchConfig,
 ) -> CircleCheckResult {
     let kdtree = site_index.coord_tree();
-    let points = site_index.coords();
+    let points = site_index.coord_tree().source();
     let dist = search_config.bondlength;
     let mut coord_circles: Vec<CoordCircle> = Vec::new();
     let mut coord_points: Vec<MultiCoordPoint> = Vec::new();
