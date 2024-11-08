@@ -69,7 +69,7 @@ impl CoordCircle {
             .map(|&i| {
                 let query: [f64; 3] = points[i].into();
                 kdtree
-                    .within_radius(&query, 2.0 * dist)
+                    .within_radius(&query, 2.0 * (dist + 1e-5_f64))
                     .iter()
                     .skip(1)
                     .map(|&&i| i)
