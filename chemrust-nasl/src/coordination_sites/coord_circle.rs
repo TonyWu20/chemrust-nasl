@@ -4,8 +4,8 @@ use std::{
     ops::ControlFlow,
 };
 
-use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use nalgebra::Point3;
+use kd_tree::KdIndexTree;
+use nalgebra::{distance_squared, Point3};
 
 use crate::{
     geometry::{
@@ -27,7 +27,7 @@ impl CoordCircle {
 
     pub fn get_possible_point(
         &self,
-        kdtree: &ImmutableKdTree<f64, 3>,
+        coord_tree: &KdIndexTree<Point3<f64>>,
         dist: f64,
     ) -> Option<DelegatePoint<2>> {
         let step_frac_pi_32 = FRAC_PI_8 / 4.0;
@@ -36,13 +36,11 @@ impl CoordCircle {
             .collect();
         let p = possible_position.iter().try_for_each(|&theta| {
             let query = self.circle().get_point_on_circle(theta);
-            let neighbours =
-                kdtree.within::<SquaredEuclidean>(&query.into(), (dist + 1e-5_f64).powi(2));
-            if !neighbours.iter().any(|nb| {
-                matches!(
-                    approx_cmp_f64(nb.distance, dist.powi(2)),
-                    FloatOrdering::Less
-                )
+            let neighbours = coord_tree.within_radius(&query, dist + 1e-5_f64);
+            if !neighbours.iter().any(|&&nb| {
+                let found = coord_tree.item(nb);
+                let distance = distance_squared(&query, found);
+                matches!(approx_cmp_f64(distance, dist.powi(2)), FloatOrdering::Less)
             }) {
                 if neighbours.len() <= 2 {
                     ControlFlow::Break(query)
@@ -61,7 +59,7 @@ impl CoordCircle {
 
     fn get_common_neighbours(
         &self,
-        kdtree: &ImmutableKdTree<f64, 3>,
+        kdtree: &KdIndexTree<Point3<f64>>,
         points: &[Point3<f64>],
         dist: f64,
     ) -> HashSet<usize> {
@@ -71,10 +69,10 @@ impl CoordCircle {
             .map(|&i| {
                 let query: [f64; 3] = points[i].into();
                 kdtree
-                    .within::<SquaredEuclidean>(&query, 4.0 * dist.powi(2))
+                    .within_radius(&query, 2.0 * dist)
                     .iter()
                     .skip(1)
-                    .map(|nb| nb.item as usize)
+                    .map(|&&i| i)
                     .collect()
             })
             .collect();
@@ -119,7 +117,7 @@ impl CoordCircle {
     /// `Some` for 1. `CoordResult::Circle`2. `CoordResult::Points`
     pub(crate) fn common_neighbours_intersect(
         &self,
-        kdtree: &ImmutableKdTree<f64, 3>,
+        kdtree: &KdIndexTree<Point3<f64>>,
         points: &[Point3<f64>],
         dist: f64,
     ) -> Option<CoordResult> {
