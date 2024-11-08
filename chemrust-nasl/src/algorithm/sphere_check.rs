@@ -7,25 +7,19 @@ use crate::geometry::{Intersect, Sphere, SphereSphereResult};
 
 use super::{SearchConfig, SiteIndex};
 
-use crate::coordination_sites::{CoordCircle, CoordResult, CoordSphere, MultiCoordPoint};
+use crate::coordination_sites::{CoordCircle, CoordResult, MultiCoordPoint};
 
 #[derive(Debug)]
 pub(crate) struct SphereCheckResult {
     single_points: Vec<MultiCoordPoint>,
     unchecked_circles: Vec<CoordCircle>,
-    spheres: Vec<CoordSphere>,
 }
 
 impl SphereCheckResult {
-    pub fn new(
-        single_points: Vec<MultiCoordPoint>,
-        unchecked_circles: Vec<CoordCircle>,
-        spheres: Vec<CoordSphere>,
-    ) -> Self {
+    pub fn new(single_points: Vec<MultiCoordPoint>, unchecked_circles: Vec<CoordCircle>) -> Self {
         Self {
             single_points,
             unchecked_circles,
-            spheres,
         }
     }
 
@@ -35,10 +29,6 @@ impl SphereCheckResult {
 
     pub fn unchecked_circles(&self) -> &[CoordCircle] {
         self.unchecked_circles.as_ref()
-    }
-
-    pub fn spheres(&self) -> &[CoordSphere] {
-        self.spheres.as_ref()
     }
 }
 
@@ -57,10 +47,6 @@ pub fn sphere_check(site_index: &SiteIndex, search_config: &SearchConfig) -> Sph
             },
         )
         .collect();
-    let spheres: Vec<CoordSphere> = results
-        .iter()
-        .filter_map(|res| res.try_into_sphere().ok())
-        .collect();
     let unchecked_circles: Vec<Vec<CoordCircle>> = results
         .iter()
         .filter_map(|res| res.try_pull_circles_from_various().ok())
@@ -69,7 +55,7 @@ pub fn sphere_check(site_index: &SiteIndex, search_config: &SearchConfig) -> Sph
         .iter_mut()
         .filter_map(|res| res.try_pull_single_points_from_various().ok())
         .collect();
-    SphereCheckResult::new(points.concat(), unchecked_circles.concat(), spheres)
+    SphereCheckResult::new(points.concat(), unchecked_circles.concat())
 }
 
 fn sphere_check_fn(
