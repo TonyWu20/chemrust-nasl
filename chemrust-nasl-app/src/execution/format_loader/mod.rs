@@ -10,3 +10,9 @@ pub fn load_cell_file<P: AsRef<Path>>(cell_path: P) -> Result<CellDocument, Form
         .parse()
         .map_err(|_| FormatError::Compatible)
 }
+
+pub fn load_cell_content(cell_content: String) -> Result<CellDocument, FormatError> {
+    CellParser::from(&cell_content)
+        .parse()
+        .map_err(|_| FormatError::Compatible)
+}
