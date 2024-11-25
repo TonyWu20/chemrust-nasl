@@ -6,10 +6,9 @@ use chemrust_core::data::atom::CoreAtomData;
 use chemrust_core::data::geom::coordinates::CoordData;
 use chemrust_core::data::lattice::CrystalModel;
 use chemrust_core::data::lattice::UnitCellParameters;
-use kd_tree::KdIndexTree;
-use nalgebra::{Point3, Vector3};
+use nalgebra::Point3;
 
-use crate::{search_sites, SearchConfig, SearchReports, SiteIndex};
+use crate::{SearchConfig, SearchReports};
 
 fn load_model(model_rel_path: &str) -> Result<CellDocument, CellParseError> {
     let root_dir = env!("CARGO_MANIFEST_DIR");
@@ -20,7 +19,7 @@ fn load_model(model_rel_path: &str) -> Result<CellDocument, CellParseError> {
 
 #[test]
 fn test_search() {
-    let model = load_model("../scanner_test_models/MnTP.cell").unwrap();
+    let model = load_model("../scanner_test_models/SAC_GDY_V.cell").unwrap();
     let lattice_vec = model.get_cell_parameters();
     let points: Vec<Point3<f64>> = model
         .get_atom_data()
@@ -41,12 +40,11 @@ fn test_search() {
         })
         .collect();
     let dist: f64 = 1.95164;
-    let site_index = SiteIndex::new(&points);
     let search_points: Vec<(usize, Point3<f64>)> =
         points.iter().enumerate().map(|(i, p)| (i, *p)).collect();
-    let search_config = SearchConfig::new(&search_points, dist);
-    let results: SearchReports = search_sites(&site_index, &search_config);
-    dbg!(results.viable_single_points());
-    dbg!(results.viable_double_points());
-    dbg!(results.points());
+    let search_config = SearchConfig::new(&search_points, &points, dist);
+    let results: SearchReports = search_config.search_sites();
+    dbg!(results.viable_single_points().unwrap().iter().len());
+    dbg!(results.viable_double_points().unwrap().iter().len());
+    dbg!(results.points().unwrap().iter().len());
 }

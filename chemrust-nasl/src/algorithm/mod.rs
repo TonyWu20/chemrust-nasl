@@ -5,31 +5,41 @@ use nalgebra::{distance_squared, Point3, Vector3};
 use rayon::prelude::*;
 
 use self::{
-    circle_check::check_circles,
-    sphere_check::{sphere_check, SphereCheckResult},
+    circle_check::CircleCheckResult,
+    sphere_check::{sphere_check_fn, SphereCheckResult},
 };
 
 use crate::{
     coordination_sites::{CoordCircle, MultiCoordPoint},
     geometry::{approx_cmp_f64, FloatOrdering},
-    DelegatePoint, Visualize,
+    CoordResult, DelegatePoint, Visualize,
 };
 
+pub use helpers::EnhancedTree;
+
 mod circle_check;
+mod helpers;
 mod sphere_check;
+
 #[cfg(test)]
 mod test;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SearchConfig<'a> {
     to_check: &'a [(usize, Point3<f64>)],
+    coord_tree: KdIndexTree<'a, Point3<f64>>,
     bondlength: f64,
 }
 
 impl<'a> SearchConfig<'a> {
-    pub fn new(to_check: &'a [(usize, Point3<f64>)], bondlength: f64) -> Self {
+    pub fn new(
+        to_check: &'a [(usize, Point3<f64>)],
+        all_points: &'a [Point3<f64>],
+        bondlength: f64,
+    ) -> Self {
         Self {
             to_check,
+            coord_tree: KdIndexTree::build_by_ordered_float(all_points),
             bondlength,
         }
     }
@@ -41,18 +51,134 @@ impl<'a> SearchConfig<'a> {
     pub fn bondlength(&self) -> f64 {
         self.bondlength
     }
-}
-
-pub struct SiteIndex<'a>(KdIndexTree<'a, Point3<f64>>);
-
-impl<'a> SiteIndex<'a> {
-    pub fn new(coords: &'a [Point3<f64>]) -> Self {
-        let coord_tree = KdIndexTree::build_by_ordered_float(coords);
-        Self(coord_tree)
-    }
 
     pub fn coord_tree(&self) -> &KdIndexTree<'a, Point3<f64>> {
-        &self.0
+        &self.coord_tree
+    }
+
+    fn check_circles(&self, unchecked_circles: &[CoordCircle]) -> CircleCheckResult {
+        let kdtree = self.coord_tree();
+        let points = self.coord_tree().source();
+        let dist = self.bondlength;
+        let mut coord_circles: Vec<CoordCircle> = Vec::new();
+        let mut coord_points: Vec<MultiCoordPoint> = Vec::new();
+        let check_results: Vec<CoordResult> = unchecked_circles
+            .par_iter()
+            .filter_map(|circ| -> Option<CoordResult> {
+                circ.common_neighbours_intersect(kdtree, points, dist)
+            })
+            .collect();
+        check_results.into_iter().for_each(|result| match result {
+            CoordResult::Circle(c) => coord_circles.push(c),
+            CoordResult::Points(mut points) => coord_points.append(&mut points),
+            _ => (),
+        });
+        CircleCheckResult::new(coord_circles, coord_points)
+    }
+
+    fn search_special_sites(
+        &self,
+        sphere_intersect_results: &SphereCheckResult,
+    ) -> Option<Vec<MultiCoordPoint>> {
+        let circle_check_results = self.check_circles(sphere_intersect_results.unchecked_circles());
+        let points = [
+            sphere_intersect_results.single_points(),
+            circle_check_results.points(),
+        ]
+        .concat();
+        let dedup_points =
+            MultiCoordPoint::dedup_points(&points, self.coord_tree(), self.bondlength);
+        if !dedup_points.is_empty() {
+            println!("Special multi-coordinated sites search completed.");
+            Some(dedup_points)
+        } else {
+            None
+        }
+    }
+
+    fn search_possible_single_points(&self) -> Option<Vec<DelegatePoint<1>>> {
+        let results: Vec<DelegatePoint<1>> = self
+            .to_check()
+            .par_iter()
+            .filter_map(|&(i, pt)| {
+                brute_force(pt, self.bondlength(), self.coord_tree())
+                    .map(|coord| DelegatePoint::<1>::new(coord, [i]))
+            })
+            .collect();
+        if !results.is_empty() {
+            Some(results)
+        } else {
+            None
+        }
+    }
+
+    pub fn search_sites(&self) -> SearchReports {
+        let sphere_intersect_results = self.sphere_check();
+        let special_sites = self.search_special_sites(&sphere_intersect_results);
+        let viable_single_sites = self.search_possible_single_points();
+        let viable_double_sites =
+            self.search_possible_double_points(sphere_intersect_results.unchecked_circles());
+        SearchReports::new(special_sites, viable_single_sites, viable_double_sites)
+    }
+
+    fn search_possible_double_points(
+        &self,
+        unchecked_circles: &[CoordCircle],
+    ) -> Option<Vec<DelegatePoint<2>>> {
+        let results: Vec<DelegatePoint<2>> = unchecked_circles
+            .par_iter()
+            .filter_map(|circ| circ.get_possible_point(self.coord_tree(), self.bondlength()))
+            .collect();
+        if !results.is_empty() {
+            Some(results)
+        } else {
+            None
+        }
+    }
+
+    pub fn validate_site<T: Visualize>(&self, coord_site: &'a T) -> Option<&'a T> {
+        let coord = coord_site.determine_coord();
+        let bondlength = self.bondlength;
+        let dist = bondlength.powi(2);
+        if self
+            .coord_tree
+            .within_radius(&coord, bondlength)
+            .iter()
+            .any(|&&nb| {
+                let distance = distance_squared(&coord, self.coord_tree.item(nb));
+                matches!(approx_cmp_f64(distance, dist), FloatOrdering::Less)
+            })
+        {
+            None
+        } else {
+            Some(coord_site)
+        }
+    }
+
+    /// The first round search, abstract into sphere-sphere intersection.
+    /// If the sphere does not have possible intersecting neighbours, then
+    /// return early as `CoordResult::Sphere`. Otherwise, Use `CoordResult::Various`
+    /// to unify the possible `CoordPoint` and `CoordCircle` (cut and intersect of two spheres)
+    pub fn sphere_check(&self) -> SphereCheckResult {
+        let mut results: Vec<CoordResult> = self
+            .to_check
+            .iter()
+            .map(
+                // Use `CoordResult::Various` to unify points and circles
+                |&(atom_id, p)| -> CoordResult {
+                    sphere_check_fn(atom_id, p, self.coord_tree(), self.bondlength())
+                },
+            )
+            .collect();
+        let unchecked_circles: Vec<Vec<CoordCircle>> = results
+            .iter()
+            .filter_map(|res| res.try_pull_circles_from_various().ok())
+            .collect();
+        let points: Vec<Vec<MultiCoordPoint>> = results
+            .iter_mut()
+            .filter_map(|res| res.try_pull_single_points_from_various().ok())
+            .collect();
+        SphereCheckResult::new(points.concat(), unchecked_circles.concat())
     }
 }
 
@@ -90,86 +216,13 @@ impl SearchReports {
 
     pub fn validated_results<T: Visualize + Clone>(
         coord_sites: &[T],
-        site_index: &SiteIndex,
         search_config: &SearchConfig,
     ) -> Vec<T> {
         coord_sites
             .iter()
-            .filter_map(|coord_site| validate_site(coord_site, site_index, search_config))
+            .filter_map(|coord_site| search_config.validate_site(coord_site))
             .cloned()
             .collect()
-    }
-}
-
-pub fn search_sites(site_index: &SiteIndex, search_config: &SearchConfig) -> SearchReports {
-    let sphere_intersect_results = sphere_check(site_index, search_config);
-    let special_sites = search_special_sites(&sphere_intersect_results, site_index, search_config);
-    let viable_single_sites = search_possible_single_points(site_index, search_config);
-    let viable_double_sites = search_possible_double_points(
-        sphere_intersect_results.unchecked_circles(),
-        site_index.coord_tree(),
-        search_config.bondlength(),
-    );
-    SearchReports::new(special_sites, viable_single_sites, viable_double_sites)
-}
-
-fn search_special_sites(
-    sphere_intersect_results: &SphereCheckResult,
-    site_index: &SiteIndex,
-    search_config: &SearchConfig,
-) -> Option<Vec<MultiCoordPoint>> {
-    let circle_check_results = check_circles(
-        sphere_intersect_results.unchecked_circles(),
-        site_index,
-        search_config,
-    );
-    let points = [
-        sphere_intersect_results.single_points(),
-        circle_check_results.points(),
-    ]
-    .concat();
-    let dedup_points =
-        MultiCoordPoint::dedup_points(&points, site_index.coord_tree(), search_config.bondlength);
-    if !dedup_points.is_empty() {
-        println!("Special multi-coordinated sites search completed.");
-        Some(dedup_points)
-    } else {
-        None
-    }
-}
-
-fn search_possible_single_points(
-    site_index: &SiteIndex,
-    search_config: &SearchConfig,
-) -> Option<Vec<DelegatePoint<1>>> {
-    let results: Vec<DelegatePoint<1>> = search_config
-        .to_check()
-        .par_iter()
-        .filter_map(|&(i, pt)| {
-            brute_force(pt, search_config.bondlength(), site_index.coord_tree())
-                .map(|coord| DelegatePoint::<1>::new(coord, [i]))
-        })
-        .collect();
-    if !results.is_empty() {
-        Some(results)
-    } else {
-        None
-    }
-}
-
-fn search_possible_double_points(
-    unchecked_circles: &[CoordCircle],
-    kdtree: &KdIndexTree<Point3<f64>>,
-    dist: f64,
-) -> Option<Vec<DelegatePoint<2>>> {
-    let results: Vec<DelegatePoint<2>> = unchecked_circles
-        .par_iter()
-        .filter_map(|circ| circ.get_possible_point(kdtree, dist))
-        .collect();
-    if !results.is_empty() {
-        Some(results)
-    } else {
-        None
     }
 }
 
@@ -224,28 +277,5 @@ fn brute_force(
     match p {
         ControlFlow::Continue(_) => None,
         ControlFlow::Break(point) => Some(point),
-    }
-}
-
-pub fn validate_site<'a, 'b, T: Visualize>(
-    coord_site: &'a T,
-    site_index: &'b SiteIndex,
-    search_config: &'b SearchConfig,
-) -> Option<&'a T> {
-    let coord = coord_site.determine_coord();
-    let bondlength = search_config.bondlength;
-    let dist = bondlength.powi(2);
-    if site_index
-        .0
-        .within_radius(&coord, bondlength)
-        .iter()
-        .any(|&&nb| {
-            let distance = distance_squared(&coord, site_index.0.item(nb));
-            matches!(approx_cmp_f64(distance, dist), FloatOrdering::Less)
-        })
-    {
-        None
-    } else {
-        Some(coord_site)
     }
 }

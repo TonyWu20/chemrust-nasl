@@ -5,9 +5,10 @@ use std::{
 };
 
 use kd_tree::KdIndexTree;
-use nalgebra::{distance_squared, Point3};
+use nalgebra::Point3;
 
 use crate::{
+    algorithm::EnhancedTree,
     geometry::{
         approx_cmp_f64, Circle3d, CircleSphereIntersection, FloatOrdering, Intersect, Sphere,
     },
@@ -30,28 +31,23 @@ impl CoordCircle {
         coord_tree: &KdIndexTree<Point3<f64>>,
         dist: f64,
     ) -> Option<DelegatePoint<2>> {
-        let step_frac_pi_32 = FRAC_PI_8 / 4.0;
-        let possible_position: Vec<f64> = (0..32)
-            .map(|i| FRAC_PI_2 + i as f64 * step_frac_pi_32)
-            .collect();
-        let p = possible_position.iter().try_for_each(|&theta| {
+        fn each_possible_theta(step: i32) -> f64 {
+            let step_frac_pi_32 = FRAC_PI_8 / 4.0;
+            FRAC_PI_2 + step as f64 * step_frac_pi_32
+        }
+        let possible_position = (0..32).map(each_possible_theta).try_for_each(|theta| {
             let query = self.circle().get_point_on_circle(theta);
             let neighbours = coord_tree.within_radius(&query, dist + 1e-5_f64);
-            if !neighbours.iter().any(|&&nb| {
-                let found = coord_tree.item(nb);
-                let distance = distance_squared(&query, found);
-                matches!(approx_cmp_f64(distance, dist.powi(2)), FloatOrdering::Less)
-            }) {
-                if neighbours.len() <= 2 {
-                    ControlFlow::Break(query)
-                } else {
-                    ControlFlow::Continue(())
-                }
+            if neighbours.len() == 2
+                && neighbours.contains(&&self.atom_ids()[0])
+                && neighbours.contains(&&self.atom_ids()[1])
+            {
+                ControlFlow::Break(query)
             } else {
                 ControlFlow::Continue(())
             }
         });
-        match p {
+        match possible_position {
             ControlFlow::Continue(_) => None,
             ControlFlow::Break(pos) => Some(DelegatePoint::<2>::new(pos, self.atom_ids)),
         }
@@ -67,9 +63,9 @@ impl CoordCircle {
             .atom_ids
             .iter()
             .map(|&i| {
-                let query: [f64; 3] = points[i].into();
+                let query = points[i];
                 kdtree
-                    .within_radius(&query, 2.0 * (dist + 1e-5_f64))
+                    .within_radius_dist_sorted(query, 2.0 * (dist + 1e-5_f64))
                     .iter()
                     .skip(1)
                     .map(|&&i| i)
@@ -131,28 +127,6 @@ impl CoordCircle {
                 // circle-sphere intersection
                 let sphere = Sphere::new(p, dist);
                 let circle_sphere = self.circle.intersect(&sphere);
-
-                // #[cfg(debug_assertions)]
-                // {
-                //     if i == 44 && self.atom_ids() == [24, 26] {
-                //         let cs_cc = self.circle().center() - sphere.center();
-                //         let cut_at = self.circle().n().dot(&cs_cc);
-                //         println!("Cut at and radius");
-                //         dbg!(cut_at.abs(), sphere.radius());
-                //         let new_circle_center = p + self.circle().n().scale(cut_at);
-                //         let new_circle_radius = (dist.powi(2) - cut_at.powi(2)).sqrt();
-                //         dbg!(new_circle_center, new_circle_radius);
-                //         dbg!(self.circle.center(), self.circle.radius());
-                //         let c1c2 = new_circle_center - self.circle.center();
-                //         let r1r2_sum_squared = (new_circle_radius + self.circle.radius()).powi(2);
-                //         dbg!(r1r2_sum_squared - c1c2.norm_squared());
-                //         dbg!(r1r2_sum_squared.sqrt() - c1c2.norm());
-                //         dbg!(approx_cmp_f64(c1c2.norm_squared(), r1r2_sum_squared));
-                //         let r1r2_diff_squared = (new_circle_radius - self.circle.radius()).powi(2);
-                //         dbg!(approx_cmp_f64(c1c2.norm_squared(), r1r2_diff_squared));
-                //         dbg!(circle_sphere);
-                //     }
-                // }
                 circle_sphere.to_coord_result(&self.atom_ids, i)
             })
             .collect();

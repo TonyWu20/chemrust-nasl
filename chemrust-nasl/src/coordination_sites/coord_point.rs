@@ -1,9 +1,11 @@
 use std::{collections::HashSet, ops::ControlFlow};
 
-use kd_tree::KdIndexTree;
 use nalgebra::{distance_squared, Point3};
 
-use crate::geometry::{approx_cmp_f64, approx_eq_point_f64, FloatEq, FloatOrdering};
+use crate::{
+    algorithm::EnhancedTree,
+    geometry::{approx_cmp_f64, approx_eq_point_f64, FloatEq, FloatOrdering},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MultiCoordPoint {
@@ -29,13 +31,13 @@ impl MultiCoordPoint {
         }
     }
 
-    pub fn no_closer_atoms(
+    pub fn no_closer_atoms<'a, E: EnhancedTree<'a, Result = &'a usize, Item = &'a Point3<f64>>>(
         self,
-        kdtree: &KdIndexTree<Point3<f64>>,
+        kdtree: &'a E,
         dist: f64,
     ) -> Option<MultiCoordPoint> {
         let closer_than_dist = kdtree
-            .within_radius(&self.point(), dist)
+            .within_radius_dist_sorted(self.point(), dist)
             .iter()
             .try_for_each(|&&nb| {
                 let distance = distance_squared(&self.point(), kdtree.item(nb));
@@ -51,9 +53,9 @@ impl MultiCoordPoint {
             None
         }
     }
-    pub fn dedup_points(
+    pub fn dedup_points<'a, E: EnhancedTree<'a, Result = &'a usize, Item = &'a Point3<f64>>>(
         points: &[MultiCoordPoint],
-        kdtree: &KdIndexTree<Point3<f64>>,
+        kdtree: &'a E,
         dist: f64,
     ) -> Vec<MultiCoordPoint> {
         let mut visited = vec![false; points.len()];
