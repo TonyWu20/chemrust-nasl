@@ -1,22 +1,22 @@
 use std::path::Path;
 
-use castep_cell_io::CellDocument;
-use chemrust_core::data::lattice::CrystalModel;
+use castep_cell_io::cell_document::CellDocument;
+use crystal_cif_io::DataBlock;
 
 use crate::error::FormatError;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AcceptFormat {
     Cell,
+    Cif,
 }
 
 pub enum ModelFormat {
     Cell(CellDocument),
+    CifDataBlock(DataBlock),
 }
 
-pub struct Model<T: CrystalModel>(pub(crate) T);
-
-pub fn match_format<P: AsRef<Path>>(file_path: &P) -> Result<AcceptFormat, FormatError> {
+pub fn match_format<P: AsRef<Path>>(file_path: P) -> Result<AcceptFormat, FormatError> {
     let suffix = file_path
         .as_ref()
         .extension()
@@ -25,6 +25,7 @@ pub fn match_format<P: AsRef<Path>>(file_path: &P) -> Result<AcceptFormat, Forma
         .unwrap();
     match suffix {
         "cell" => Ok(AcceptFormat::Cell),
+        "cif" => Ok(AcceptFormat::Cif),
         _ => Err(FormatError::Supported),
     }
 }
