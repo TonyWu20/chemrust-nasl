@@ -9,7 +9,9 @@ use castep_periodic_table::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{interactive_ui::KPointQuality, supportive_data::FractionalCoordRange};
+use crate::{
+    execution::SearchJob, interactive_ui::KPointQuality, supportive_data::FractionalCoordRange,
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 /// A config struct
@@ -94,6 +96,20 @@ impl TaskTable {
     }
     pub fn z_range(&self) -> FractionalCoordRange {
         FractionalCoordRange::new(self.z_range.0, self.z_range.1)
+    }
+}
+
+impl SearchJob for TaskTable {
+    fn target_bondlength(&self) -> f64 {
+        self.target_bondlength
+    }
+
+    fn search_range(&self, axis: crate::execution::Axis) -> FractionalCoordRange {
+        match axis {
+            crate::execution::Axis::X => self.x_range(),
+            crate::execution::Axis::Y => self.y_range(),
+            crate::execution::Axis::Z => self.z_range(),
+        }
     }
 }
 

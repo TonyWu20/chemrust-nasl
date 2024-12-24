@@ -1,9 +1,5 @@
-use chemrust_core::data::{
-    atom::CoreAtomData,
-    geom::coordinates::CoordData,
-    lattice::{CrystalModel, UnitCellParameters},
-};
-use helpers::{boundary_check, get_inbound_cartesian_coord};
+use chemrust_core::data::{atom::CoreAtomData, lattice::CrystalModel};
+use helpers::get_inbound_cartesian_coord;
 use std::fs::read_to_string;
 
 use castep_cell_io::CellParser;
@@ -79,7 +75,7 @@ pub trait SearchJob {
     fn search<C: CrystalModel>(&self, model: &C) -> Result<SearchReports, RunError> {
         let to_check = self.get_to_check_atom(model);
         let all_atoms = self.all_atoms(model);
-        let search_config = SearchConfig::new(&to_check, &all_atoms, self.bondlength());
+        let search_config = SearchConfig::new(&to_check, &all_atoms, self.target_bondlength());
         let search_report = search_config.search_sites();
         if search_report.viable_single_points().is_none()
             && search_report.viable_double_points().is_none()
@@ -92,7 +88,6 @@ pub trait SearchJob {
             Ok(search_report)
         }
     }
-    fn export_results(&self)
 }
 
 pub fn search_with_length<T: CrystalModel>(
