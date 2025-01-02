@@ -1,6 +1,6 @@
 use std::{env, str::FromStr};
 
-use castep_periodic_table::element::Element;
+use castep_periodic_table::element::ElementSymbol;
 use inquire::{Confirm, InquireError, Select, Text};
 
 use super::{FilePathCompleter, KPointQuality, RunMode};
@@ -10,28 +10,35 @@ pub struct ExportOptions {
     potential_dir: String,
     kpoint_quality: KPointQuality,
     edft: bool,
+    build_seed: bool,
     run_mode: RunMode,
 }
 
 impl ExportOptions {
     pub fn new(
-        new_element: &Element,
+        new_element: &ElementSymbol,
         bondlength: f64,
         model_name: &str,
     ) -> Result<ExportOptions, InquireError> {
-        let export_dir =
-            Self::ask_export_dir(&new_element.symbol_to_string(), bondlength, model_name)?;
+        let export_dir = Self::ask_export_dir(&new_element.to_string(), bondlength, model_name)?;
         let potential_dir = Self::ask_potential_dir()?;
         let kpoint_quality = Self::ask_kpoint_quality()?;
         let edft = Self::ask_edft(new_element)?;
+        let build_seed = Self::ask_build_seed()?;
         let run_mode = Self::ask_run_mode()?;
         Ok(Self {
             export_dir,
             potential_dir,
             kpoint_quality,
             edft,
+            build_seed,
             run_mode,
         })
+    }
+    fn ask_build_seed() -> Result<bool, InquireError> {
+        Confirm::new("Do you want to generate castep job seed files?")
+            .with_default(false)
+            .prompt()
     }
     fn ask_export_dir(
         element_symbol: &str,
@@ -52,9 +59,9 @@ impl ExportOptions {
             .with_default(&potential_loc_path)
             .prompt()
     }
-    fn ask_edft(new_element: &Element) -> Result<bool, InquireError> {
-        let edft_help_message = if (57..72).contains(&new_element.atomic_number())
-            || (89..104).contains(&new_element.atomic_number())
+    fn ask_edft(new_element: &ElementSymbol) -> Result<bool, InquireError> {
+        let edft_help_message = if (57..72).contains(&(*new_element as usize))
+            || (89..104).contains(&(*new_element as usize))
         {
             format!(
                 "The element {} belongs to the rare-earth series. edft method is suggested. (Type y/yes)",
@@ -80,10 +87,8 @@ impl ExportOptions {
         let run_mode_options: Vec<String> = vec![
             "Fast".into(),
             "Full".into(),
-            "Post".into(),
             "Dryrun".into(),
             "Debug".into(),
-            "Clean".into(),
         ];
         let run_mode = Select::new("Run mode of program", run_mode_options).prompt()?;
         Ok(RunMode::from_str(&run_mode).unwrap_or(RunMode::Debug))
@@ -106,5 +111,9 @@ impl ExportOptions {
 
     pub fn run_mode(&self) -> RunMode {
         self.run_mode
+    }
+
+    pub fn build_seed(&self) -> bool {
+        self.build_seed
     }
 }

@@ -1,16 +1,19 @@
 use std::path::Path;
 
-use castep_periodic_table::element::Element;
+use castep_periodic_table::element::ElementSymbol;
 use inquire::{required, validator::Validation, CustomType, InquireError, Text};
 
-use crate::{supportive_data::FractionalCoordRange, yaml_parser::TaskTable};
+use crate::{
+    supportive_data::FractionalCoordRange,
+    yaml_parser::{ExportConfig, RunConfig, TaskTable},
+};
 
 use super::{filepath_completer::FilePathCompleter, ExportOptions};
 
 #[derive(Debug)]
 pub struct RunOptions {
     filepath: String,
-    new_element: Element,
+    new_element: ElementSymbol,
     target_bondlength: f64,
     x_range: FractionalCoordRange,
     y_range: FractionalCoordRange,
@@ -38,8 +41,8 @@ impl RunOptions {
             .with_help_message(&help_message)
             .prompt()
     }
-    fn ask_element() -> Result<Element, InquireError> {
-        CustomType::<Element>::new("Element symbol of the new atom: ").prompt()
+    fn ask_element() -> Result<ElementSymbol, InquireError> {
+        CustomType::<ElementSymbol>::new("Element symbol of the new atom: ").prompt()
     }
     fn ask_bondlength() -> Result<f64, InquireError> {
         CustomType::<f64>::new("What is the target bondlength (Å)?").with_error_message("Please type a valid number").with_help_message("Type the desired bondlength between the new element atom and the existing atoms in model").prompt()
@@ -70,7 +73,7 @@ impl RunOptions {
         let z_range = Self::ask_frac_range("z-axis")?;
         Ok(RunOptions {
             filepath: filename,
-            new_element: new_element.clone(),
+            new_element,
             target_bondlength,
             x_range,
             y_range,
@@ -78,52 +81,50 @@ impl RunOptions {
         })
     }
 
-    pub fn export_config(&self) -> Result<TaskTable, InquireError> {
-        let model_path = self.filepath().into();
+    pub fn build_task_table(&self) -> Result<TaskTable, InquireError> {
+        let run_config = RunConfig::new(
+            self.filepath().into(),
+            self.new_element,
+            self.target_bondlength(),
+            (self.x_range.min(), self.x_range.max()),
+            (self.y_range.min(), self.y_range.max()),
+            (self.z_range.min(), self.z_range.max()),
+        );
+        let export_config = self.export_config()?;
+        Ok(TaskTable::new(run_config, export_config))
+    }
+
+    pub fn export_config(&self) -> Result<ExportConfig, InquireError> {
         let model_seedname = Path::new(self.filepath())
             .file_stem()
             .unwrap()
             .to_str()
             .unwrap();
-        let new_element = self.new_element().symbol();
-        let target_bondlength = self.target_bondlength();
         let export_options =
             ExportOptions::new(&self.new_element, self.target_bondlength(), model_seedname)?;
-        Ok(TaskTable {
-            model_path,
-            new_element,
-            target_bondlength,
-            x_range: (self.x_range.min(), self.x_range.max()),
-            y_range: (self.y_range.min(), self.y_range.max()),
-            z_range: (self.z_range.min(), self.z_range.max()),
-            export_dir: export_options.export_dir().into(),
-            potential_dir: Some(export_options.potential_dir().into()),
-            kpoint_quality: export_options.kpoint_quality().clone(),
-            edft: export_options.edft(),
-        })
+        let export_dir = export_options.export_dir().into();
+        let potential_dir = Some(export_options.potential_dir().into());
+        let kpoint_quality = export_options.kpoint_quality().to_owned();
+        let edft = export_options.edft();
+        let build_seed = export_options.build_seed();
+        Ok(ExportConfig::new(
+            export_dir,
+            potential_dir,
+            kpoint_quality,
+            edft,
+            build_seed,
+        ))
     }
 
     pub fn filepath(&self) -> &str {
         self.filepath.as_ref()
     }
 
-    pub fn new_element(&self) -> &Element {
+    pub fn new_element(&self) -> &ElementSymbol {
         &self.new_element
     }
 
     pub fn target_bondlength(&self) -> f64 {
         self.target_bondlength
-    }
-
-    pub fn x_range(&self) -> FractionalCoordRange {
-        self.x_range
-    }
-
-    pub fn y_range(&self) -> FractionalCoordRange {
-        self.y_range
-    }
-
-    pub fn z_range(&self) -> FractionalCoordRange {
-        self.z_range
     }
 }

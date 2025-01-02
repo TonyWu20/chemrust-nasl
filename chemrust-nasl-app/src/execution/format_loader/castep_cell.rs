@@ -1,6 +1,6 @@
 use std::{fs::read_to_string, path::Path};
 
-use castep_cell_io::{CellDocument, CellParser};
+use castep_cell_io::{cell_document::CellDocument, CellParser};
 
 use crate::error::FormatError;
 

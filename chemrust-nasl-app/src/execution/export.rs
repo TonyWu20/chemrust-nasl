@@ -1,157 +1,141 @@
-use std::fmt::Debug;
-use std::fs::{create_dir_all, write};
-use std::ops::ControlFlow;
-use std::path::{Path, PathBuf};
-use std::{fs::create_dir, io::Error as IoError};
+#[cfg(not(test))]
+use std::fs::write;
+use std::path::PathBuf;
+use std::{fmt::Display, path::Path};
 
-use castep_cell_io::{CellDocument, IonicPosition};
-use chemrust_core::data::lattice::UnitCellParameters;
-use chemrust_nasl::{CoordSite, DelegatePoint, MultiCoordPoint, SearchReports, Visualize};
-use crystal_cif_io::to_cif_document;
+use castep_periodic_table::element::ElementSymbol;
+use chemrust_core::data::lattice::CrystalModel;
+use chemrust_nasl::{CoordSite, SearchReports, Visualize};
 
-use crate::yaml_parser::TaskTable;
+use crate::error::RunError;
 
-pub fn export_all<T: UnitCellParameters>(
-    base_model: &CellDocument,
-    cell_param: &T,
-    task_config: &TaskTable,
-    results: &SearchReports,
-) -> Result<(usize, usize, usize), IoError> {
-    let mut num_multi = 0_usize;
-    let mut num_single = 0_usize;
-    let mut num_double = 0_usize;
-    if let Some(multi_points) = results.points() {
-        let boundary_checked: Vec<MultiCoordPoint> =
-            points_boundary_check(multi_points, cell_param);
-        if boundary_checked.len() > 1 {
-            export(base_model, cell_param, task_config, &boundary_checked)?;
-            collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
-            num_multi = boundary_checked.len();
-            println!(
-                "Exported {} multi-coordinated positions;",
-                boundary_checked.len()
-            );
+#[derive(Debug, Clone)]
+pub struct ExportFile<T: Display, P: AsRef<Path>> {
+    file: T,
+    file_name: P,
+}
+
+impl<T: Display, P: AsRef<Path>> ExportFile<T, P> {
+    pub fn new(file: T, file_name: P) -> Self {
+        Self { file, file_name }
+    }
+
+    pub fn file(&self) -> &T {
+        &self.file
+    }
+
+    pub fn file_name(&self) -> &P {
+        &self.file_name
+    }
+}
+
+pub trait RhinoExport {
+    fn new_element(&self) -> &ElementSymbol;
+    fn base_model_name(&self) -> &str;
+    fn export_dir(&self) -> &Path;
+    fn potential_loc(&self) -> &Path;
+    fn export_filename<E: ExportFormat>(&self, coord_site: &impl CoordSite) -> PathBuf {
+        let atom_ids_text = coord_site.connecting_atoms_msg();
+        self.export_dir().join(format!(
+            "{}_{}.{}",
+            self.base_model_name(),
+            atom_ids_text,
+            E::suffix()
+        ))
+    }
+    fn create_all_sites<E: ExportFormat>(
+        &self,
+        base_model: &impl CrystalModel,
+        coord_sites: &[(impl CoordSite + Visualize)],
+    ) -> Vec<ExportFile<E::Item, PathBuf>> {
+        coord_sites
+            .iter()
+            .map(|c| self.create_each_site::<E>(base_model, c))
+            .collect()
+    }
+    fn create_each_site<E: ExportFormat>(
+        &self,
+        base_model: &impl CrystalModel,
+        coord_site: &(impl CoordSite + Visualize),
+    ) -> ExportFile<E::Item, PathBuf> {
+        ExportFile::new(
+            E::add_new_site(base_model, coord_site, self.new_element()),
+            self.export_filename::<E>(coord_site),
+        )
+    }
+    fn export_all_kinds_sites<E: ExportFormat>(
+        &self,
+        base_model: &impl CrystalModel,
+        search_reports: &SearchReports,
+    ) -> Result<(), RunError> {
+        if let Some(points) = search_reports.viable_single_points() {
+            self.create_all_sites::<E>(base_model, points)
+                .iter()
+                .try_for_each(|e| self.export_each_site::<E, PathBuf>(e))?;
+        }
+        if let Some(points) = search_reports.viable_double_points() {
+            self.create_all_sites::<E>(base_model, points)
+                .iter()
+                .try_for_each(|e| self.export_each_site::<E, PathBuf>(e))?;
+        }
+        if let Some(points) = search_reports.points() {
+            self.create_all_sites::<E>(base_model, points)
+                .iter()
+                .try_for_each(|e| self.export_each_site::<E, PathBuf>(e))?;
+        }
+        Ok(())
+    }
+    fn export_each_site<E: ExportFormat, P: AsRef<Path>>(
+        &self,
+        new_file: &ExportFile<E::Item, P>,
+    ) -> Result<(), RunError> {
+        #[cfg(test)]
+        {
+            println!("{}", new_file.file_name().as_ref().display());
+            Ok(())
+        }
+        #[cfg(not(test))]
+        {
+            Ok(write(new_file.file_name(), new_file.file().to_string())?)
         }
     }
-    if let Some(single_points) = results.viable_single_points() {
-        let boundary_checked: Vec<DelegatePoint<1>> =
-            points_boundary_check(single_points, cell_param);
-        if boundary_checked.len() > 1 {
-            export(base_model, cell_param, task_config, &boundary_checked)?;
-            collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
-            num_single = boundary_checked.len();
-            println!(
-                "Exported {} possible singly-coordinated positions;",
-                boundary_checked.len()
-            )
-        }
-    }
-    if let Some(double_points) = results.viable_double_points() {
-        let boundary_checked: Vec<DelegatePoint<2>> =
-            points_boundary_check(double_points, cell_param);
-        if boundary_checked.len() > 1 {
-            export(base_model, cell_param, task_config, &boundary_checked)?;
-            collectively_export(base_model, cell_param, task_config, &boundary_checked)?;
-            num_double = boundary_checked.len();
-            println!(
-                "Exported {} possible doubly-coordinated positions;",
-                boundary_checked.len()
-            );
-        }
-    }
-    Ok((num_multi, num_single, num_double))
 }
 
-fn points_boundary_check<T: Visualize + Clone, U: UnitCellParameters>(
-    points: &[T],
-    cell_param: &U,
-) -> Vec<T> {
-    points
-        .iter()
-        .filter(|cp| {
-            let frac_coord = cp.fractional_coord(cell_param.lattice_bases());
-            let check = frac_coord.iter().try_for_each(|&v| {
-                if !(0.0..=1.0).contains(&v) {
-                    ControlFlow::Break(())
-                } else {
-                    ControlFlow::Continue(())
-                }
-            });
-            matches!(check, ControlFlow::Continue(()))
-        })
-        .cloned()
-        .collect::<Vec<T>>()
+pub trait ExportFormat {
+    type Item: Display;
+    fn suffix() -> String;
+    fn add_new_site(
+        base_model: &impl CrystalModel,
+        coord_site: &(impl CoordSite + Visualize),
+        element_symbol: &ElementSymbol,
+    ) -> Self::Item;
 }
 
-fn export_filename<T: CoordSite>(coord_site: &T, task_config: &TaskTable) -> PathBuf {
-    let atom_ids_text = coord_site.connecting_atoms_msg();
-    let model_name = Path::new(task_config.model_path())
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .expect("Invalid filename");
-    Path::new(task_config.export_dir()).join(format!("{}_{}.cell", model_name, atom_ids_text))
-}
+#[cfg(test)]
+mod test {
+    use crate::execution::search_job::SearchJob;
+    use castep_cell_io::cell_document::CellDocument;
+    use crystal_cif_io::DataBlock;
 
-fn export<T: CoordSite + Visualize, U: UnitCellParameters>(
-    base_model: &CellDocument,
-    cell_param: &U,
-    task_config: &TaskTable,
-    coord_sites: &[T],
-) -> Result<(), IoError> {
-    let export_dir_path = Path::new(task_config.export_dir());
-    if !export_dir_path.exists() {
-        create_dir_all(export_dir_path)?;
+    use crate::{error::RunError, ModelFormat, TaskTable};
+
+    use super::RhinoExport;
+
+    #[test]
+    fn export_traits() -> Result<(), RunError> {
+        let table_path = "example_task.yaml";
+        let task_table = TaskTable::load_task_table(table_path).expect("Path not found");
+        let model = ModelFormat::load_model(task_table.model_path())
+            .ok()
+            .unwrap();
+        let cell = model.as_cell().unwrap();
+        let results = task_table.search_config().search(cell)?;
+        assert!(task_table
+            .export_all_kinds_sites::<CellDocument>(cell, &results)
+            .is_ok());
+        assert!(task_table
+            .export_all_kinds_sites::<DataBlock>(cell, &results)
+            .is_ok());
+        Ok(())
     }
-    coord_sites.iter().try_for_each(|site| {
-        let filename = export_filename(site, task_config);
-        let mut new_model = base_model.clone();
-        let new_pos_coordinate = site.fractional_coord(cell_param.lattice_bases());
-        let new_pos = IonicPosition::new(
-            task_config.new_element().symbol(),
-            new_pos_coordinate.into(),
-            None,
-        );
-        new_model
-            .model_description_mut()
-            .ionic_pos_block_mut()
-            .positions_mut()
-            .push(new_pos);
-        let cif_file = to_cif_document(&new_model, filename.file_stem().unwrap().to_str().unwrap());
-        let cif_filename = filename.with_extension("cif");
-        new_model.write_out(filename)?;
-        write(cif_filename, cif_file.to_string())
-    })
-}
-
-fn collectively_export<T: CoordSite + Visualize + Debug, U: UnitCellParameters>(
-    base_model: &CellDocument,
-    cell_param: &U,
-    task_config: &TaskTable,
-    coord_sites: &[T],
-) -> Result<(), IoError> {
-    let export_dir_path = Path::new(task_config.export_dir());
-    if !export_dir_path.exists() {
-        create_dir(export_dir_path)?;
-    }
-    let mut new_model = base_model.clone();
-    coord_sites.iter().for_each(|site| {
-        let new_pos_coordinate = site.fractional_coord(cell_param.lattice_bases());
-        let symbol = site.element_by_cn_number();
-        let new_pos = IonicPosition::new(symbol, new_pos_coordinate.into(), None);
-        new_model
-            .model_description_mut()
-            .ionic_pos_block_mut()
-            .positions_mut()
-            .push(new_pos);
-    });
-    let model_name = Path::new(task_config.model_path())
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .expect("Invalid filename");
-    let filename = Path::new(task_config.export_dir()).join(format!(
-        "{}_{}_all.cell",
-        model_name,
-        coord_sites[0].site_type()
-    ));
-    new_model.write_out(filename)
 }

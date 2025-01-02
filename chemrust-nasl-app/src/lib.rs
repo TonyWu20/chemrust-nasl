@@ -1,21 +1,33 @@
 pub mod arg_parser;
-mod bin;
 pub mod error;
 pub mod execution;
 pub mod interactive_ui;
 pub mod supportive_data;
 pub mod yaml_parser;
 
+use chemrust_core::data::lattice::CrystalModel;
+use chemrust_nasl::SearchReports;
 use error::RunError;
+pub use execution::{ExportFormat, ModelFormat, RhinoExport, SearchJob};
 pub use interactive_ui::KPointQuality;
 pub use yaml_parser::TaskTable;
 
-pub fn run_by_table(task_table: &TaskTable) -> Result<(), RunError> {
-    let results = execution::search_with_task_table(task_table)?;
-    execution::export_results_in_cell(task_table, &results)?;
-    println!(
-        "Results have been written to {}",
-        task_table.export_dir().display()
-    );
-    Ok(())
+pub fn run(
+    model: &impl CrystalModel,
+    search_job: &impl SearchJob,
+) -> Result<SearchReports, RunError> {
+    let results = search_job.search(model)?;
+    let mul_exists = results.points().map(|v| v.is_empty()).unwrap_or(false);
+    let single_exists = results
+        .viable_single_points()
+        .map(|v| v.is_empty())
+        .unwrap_or(false);
+    let double_exists = results
+        .viable_double_points()
+        .map(|v| v.is_empty())
+        .unwrap_or(false);
+    if !mul_exists && !single_exists && !double_exists {
+        return Err(RunError::NoAvailableResults);
+    }
+    Ok(results)
 }

@@ -1,39 +1,72 @@
 #![allow(dead_code)]
-use std::{error::Error, fs};
+use std::fs::{self, create_dir};
 
+use anyhow::Result;
+use castep_cell_io::cell_document::CellDocument;
 use clap::Parser;
-use rhino_lib::arg_parser::Args;
-use rhino_lib::arg_parser::ProgramMode;
-use rhino_lib::interactive_ui::RunOptions;
+use crystal_cif_io::DataBlock;
 
-use rhino_lib::execution::{export_results_in_cell, search};
-use rhino_lib::run_by_table;
-use rhino_lib::yaml_parser::TaskTable;
+use arg_parser::{Args, ProgramMode};
+use castep_seeding::RootJobs;
+use interactive_ui::RunOptions;
+use rhino_lib::{arg_parser, interactive_ui, run, ModelFormat, RhinoExport, TaskTable};
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let args = Args::parse();
     let program_mode = args.mode.unwrap_or(ProgramMode::I);
-    if program_mode == ProgramMode::I {
-        interactive_cli()?;
-    } else {
-        run_by_config(args.config_loc)?;
+    match program_mode {
+        ProgramMode::C => run_by_config(args.config_loc)?,
+        ProgramMode::I => interactive_cli()?,
     }
     Ok(())
 }
 
-fn run_by_config(yaml_config_path: Option<String>) -> Result<(), Box<dyn Error>> {
-    let filepath = yaml_config_path.unwrap_or("config.yaml".to_string());
-    let yaml_table = TaskTable::load_task_table(filepath)?;
-    run_by_table(&yaml_table)?;
+fn run_by_table(yaml_table: &TaskTable) -> Result<()> {
+    if !yaml_table.export_dir().exists() {
+        create_dir(yaml_table.export_dir())?;
+    }
+    let model = ModelFormat::load_model(yaml_table.model_path())?;
+    let results = match &model {
+        ModelFormat::Cell(cell_document) => run(cell_document, yaml_table.search_config())?,
+        ModelFormat::CifDataBlock(data_block) => run(data_block, yaml_table.search_config())?,
+    };
+    match model {
+        ModelFormat::Cell(cell_document) => {
+            yaml_table.export_all_kinds_sites::<CellDocument>(&cell_document, &results)?;
+            yaml_table.export_all_kinds_sites::<DataBlock>(&cell_document, &results)?;
+        }
+        ModelFormat::CifDataBlock(data_block) => {
+            yaml_table.export_all_kinds_sites::<CellDocument>(&data_block, &results)?;
+            yaml_table.export_all_kinds_sites::<DataBlock>(&data_block, &results)?;
+        }
+    }
+    if yaml_table.export_config().build_seed() {
+        yaml_table.build_all(
+            yaml_table.export_config(),
+            yaml_table.export_config(),
+            yaml_table.export_config().potential_loc(),
+        )?;
+        println!("Built all seed folders")
+    }
     Ok(())
 }
 
-fn interactive_cli() -> Result<(), Box<dyn Error>> {
+fn run_by_config(yaml_config_path: Option<String>) -> Result<()> {
+    let filepath = yaml_config_path.unwrap_or("config.yaml".to_string());
+    let yaml_table = TaskTable::load_task_table(filepath)?;
+    run_by_table(&yaml_table)?;
+    println!(
+        "Results have been written to {}",
+        yaml_table.export_dir().display()
+    );
+    Ok(())
+}
+
+fn interactive_cli() -> Result<()> {
     // CLI interpretation
     let run_options = RunOptions::new().unwrap();
-    let yaml_table = run_options.export_config()?;
-    let results = search(&yaml_table)?;
-    let (mul, sing, doub) = export_results_in_cell(&yaml_table, &results)?;
+    let yaml_table = run_options.build_task_table()?;
+    run_by_table(&yaml_table)?;
     let export_table_filename = yaml_table.export_dir().join(
         yaml_table
             .export_dir()
@@ -42,17 +75,13 @@ fn interactive_cli() -> Result<(), Box<dyn Error>> {
             .to_str()
             .expect("Invalid Unicode"),
     );
-    if mul == 0 && sing == 0 && doub == 0 {
-        println!("No avaliable results. You may check if the atoms in the `.cell` are too close to the boundary of the lattice. Adjust them to be within the lattice could help.");
-    } else {
-        println!(
-            "Results have been written to {}",
-            yaml_table.export_dir().display()
-        );
-        fs::write(
-            format!("{}.yaml", export_table_filename.display()),
-            serde_yaml::to_string(&yaml_table)?,
-        )?;
-    }
+    println!(
+        "Results have been written to {}",
+        yaml_table.export_dir().display()
+    );
+    fs::write(
+        format!("{}.yaml", export_table_filename.display()),
+        serde_yaml::to_string(&yaml_table)?,
+    )?;
     Ok(())
 }
