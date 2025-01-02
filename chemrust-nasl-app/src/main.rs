@@ -3,13 +3,16 @@ use std::fs::{self, create_dir};
 
 use anyhow::Result;
 use castep_cell_io::cell_document::CellDocument;
+use chemrust_core::data::lattice::CrystalModel;
 use clap::Parser;
 use crystal_cif_io::DataBlock;
 
-use arg_parser::{Args, ProgramMode};
 use castep_seeding::RootJobs;
-use interactive_ui::RunOptions;
-use rhino_lib::{arg_parser, interactive_ui, run, ModelFormat, RhinoExport, TaskTable};
+use rhino_lib::{
+    arg_parser::{Args, ProgramMode},
+    interactive_ui::RunOptions,
+    run, ModelFormat, RhinoExport, SearchJob, TaskTable,
+};
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -21,25 +24,30 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+fn search_n_export<C: CrystalModel>(
+    base_model: &C,
+    search_job: &impl SearchJob,
+    rhino_export: &impl RhinoExport,
+) -> Result<()> {
+    let results = run(base_model, search_job)?;
+    rhino_export.export_all_kinds_sites::<CellDocument>(base_model, &results)?;
+    rhino_export.export_all_kinds_sites::<DataBlock>(base_model, &results)?;
+    Ok(())
+}
+
 fn run_by_table(yaml_table: &TaskTable) -> Result<()> {
     if !yaml_table.export_dir().exists() {
         create_dir(yaml_table.export_dir())?;
     }
     let model = ModelFormat::load_model(yaml_table.model_path())?;
-    let results = match &model {
-        ModelFormat::Cell(cell_document) => run(cell_document, yaml_table.search_config())?,
-        ModelFormat::CifDataBlock(data_block) => run(data_block, yaml_table.search_config())?,
-    };
-    match model {
+    match &model {
         ModelFormat::Cell(cell_document) => {
-            yaml_table.export_all_kinds_sites::<CellDocument>(&cell_document, &results)?;
-            yaml_table.export_all_kinds_sites::<DataBlock>(&cell_document, &results)?;
+            search_n_export(cell_document, yaml_table.search_config(), yaml_table)
         }
         ModelFormat::CifDataBlock(data_block) => {
-            yaml_table.export_all_kinds_sites::<CellDocument>(&data_block, &results)?;
-            yaml_table.export_all_kinds_sites::<DataBlock>(&data_block, &results)?;
+            search_n_export(data_block, yaml_table.search_config(), yaml_table)
         }
-    }
+    }?;
     if yaml_table.export_config().build_seed() {
         yaml_table.build_all(
             yaml_table.export_config(),

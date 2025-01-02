@@ -1,6 +1,6 @@
 [package]
 name = "chemrust-nasl"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["TonyWu20"]
 readme = "../README.md"
@@ -14,11 +14,11 @@ description = "New Adsorption Site Locator (NASL) for catalyst materials. Writte
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chemrust-core = "0.3.5"
+chemrust-core = "0.4.0"
 nalgebra = "0.33.*"
 kd-tree = {git  = "https://github.com/TonyWu20/kd-tree", features=["nalgebra" ]}
-castep-periodic-table = "0.5.1"
+castep-periodic-table = "0.5.2"
 rayon = "1.10"
 
 [dev-dependencies]
-castep-cell-io = "0.2.9"
+castep-cell-io = {path = "../../castep-cell-io"}
