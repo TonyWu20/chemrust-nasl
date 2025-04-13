@@ -3,9 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use castep_cell_io::{
-    cell_document::CellDocument, CastepParams, CastepTask, CellParser, EnergyCutoffError,
-};
+use castep_cell_io::{cell_document::CellDocument, CastepTask, CellParser};
+use castep_param_io::param::CastepParam;
 use castep_periodic_table::{
     data::ELEMENT_TABLE,
     element::{Element, ElementSymbol, LookupElement},
@@ -193,9 +192,9 @@ impl ParamBuilding for ExportConfig {
         &self,
         template_cell: &CellDocument,
         castep_task: CastepTask,
-    ) -> Result<CastepParams, EnergyCutoffError> {
+    ) -> Result<CastepParam, SeedingErrors> {
         match castep_task {
-            castep_cell_io::CastepTask::BandStructure => self.bs_param_template(
+            castep_cell_io::CastepTask::BandStructure => self.dos_param_template(
                 template_cell,
                 castep_cell_io::EnergyCutoff::Ultrafine,
                 self.edft,

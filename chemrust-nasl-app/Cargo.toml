@@ -13,19 +13,20 @@ description = "New Adsorption Site Locator (NASL) for catalyst materials. Writte
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-castep-cell-io = "0.2.11"
+castep-cell-io = "0.2.16"
 castep-periodic-table = "0.5.2"
 chemrust-nasl = {path = "../chemrust-nasl"}
 clap = {version = "4", features = ["derive"]}
 inquire = "0.7.5"
 serde_yaml = "0.9.34"
 serde = {version = "1.0", features = ["derive"]}
-chemrust-core = "0.4.0"
+chemrust-core = "0.5.0"
 nalgebra = "0.33"
 crystal-cif-io = {git = "https://github.com/TonyWu20/crystal-cif-io", features = ["chemrust-core"]}
 castep-seeding = {git = "https://github.com/TonyWu20/castep-seeding"}
 anyhow = "1.0.94"
 thiserror = "2.0.9"
+castep-param-io = "0.1.2"
 
 [lib]
 name="rhino_lib"
