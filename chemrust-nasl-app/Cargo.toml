@@ -22,7 +22,7 @@ serde_yaml = "0.9.34"
 serde = {version = "1.0", features = ["derive"]}
 chemrust-core = "0.5.0"
 nalgebra = "0.33"
-crystal-cif-io = {git = "https://github.com/TonyWu20/crystal-cif-io", features = ["chemrust-core"]}
+crystal-cif-io = {git = "https://github.com/TonyWu20/crystal-cif-io", branch = "dev", features = ["chemrust-core"]}
 castep-seeding = {git = "https://github.com/TonyWu20/castep-seeding"}
 anyhow = "1.0.94"
 thiserror = "2.0.9"
