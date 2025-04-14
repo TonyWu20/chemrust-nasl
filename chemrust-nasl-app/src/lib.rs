@@ -17,16 +17,16 @@ pub fn run(
     search_job: &impl SearchJob,
 ) -> Result<SearchReports, RunError> {
     let results = search_job.search(model)?;
-    let mul_exists = results.points().map(|v| v.is_empty()).unwrap_or(false);
-    let single_exists = results
+    let mul_empty = results.points().map(|v| v.is_empty()).unwrap_or(false);
+    let single_empty = results
         .viable_single_points()
         .map(|v| v.is_empty())
         .unwrap_or(false);
-    let double_exists = results
+    let double_empty = results
         .viable_double_points()
         .map(|v| v.is_empty())
         .unwrap_or(false);
-    if !mul_exists && !single_exists && !double_exists {
+    if mul_empty && single_empty && double_empty {
         return Err(RunError::NoAvailableResults);
     }
     Ok(results)

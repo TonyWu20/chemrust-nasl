@@ -10,7 +10,7 @@ pub enum RunError {
     FormatError(#[from] FormatError),
     #[error("Error in creating directory: {0} ")]
     CreateDir(#[from] io::Error),
-    #[error("No avaliable results. You may check if the atoms in the `.cell` are too close to the boundary of the lattice. Adjust them to be within the lattice could help.")]
+    #[error("No available results. You may check if the atoms in the `.cell` are too close to the boundary of the lattice. Adjust them to be within the lattice could help.")]
     NoAvailableResults,
     #[error("Failed to load yaml config")]
     LoadYAML(#[from] serde_yaml::Error),

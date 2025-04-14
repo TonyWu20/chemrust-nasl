@@ -154,7 +154,7 @@ impl<'a> SearchConfig<'a> {
             .iter()
             .any(|&&nb| {
                 let distance = distance_squared(&coord, self.coord_tree.item(nb));
-                matches!(approx_cmp_f64(distance, dist + 1e_5), FloatOrdering::Less)
+                matches!(approx_cmp_f64(distance, dist), FloatOrdering::Less)
             })
         {
             None
