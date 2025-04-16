@@ -2,6 +2,7 @@ pub mod arg_parser;
 pub mod error;
 pub mod execution;
 pub mod interactive_ui;
+pub mod seeding;
 pub mod supportive_data;
 pub mod yaml_parser;
 

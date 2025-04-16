@@ -1,5 +1,6 @@
 use std::io;
 
+use castep_seeding::SeedingErrors;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -14,6 +15,8 @@ pub enum RunError {
     NoAvailableResults,
     #[error("Failed to load yaml config")]
     LoadYAML(#[from] serde_yaml::Error),
+    #[error("Error in creating seed files: {0}")]
+    SeedingError(#[from] SeedingErrors),
 }
 
 #[derive(Error, Debug, Clone, Copy)]
