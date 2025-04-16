@@ -15,10 +15,16 @@ use crate::{
     CoordResult, DelegatePoint, MultiCoordPoint,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub struct CoordCircle {
     pub(crate) circle: Circle3d,
     pub(crate) atom_ids: [usize; 2],
+}
+
+impl PartialEq for CoordCircle {
+    fn eq(&self, other: &Self) -> bool {
+        self.atom_ids == other.atom_ids
+    }
 }
 
 impl CoordCircle {

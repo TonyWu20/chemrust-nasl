@@ -22,7 +22,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct PotentialFileBytes(pub(crate) Vec<u8>);
+pub struct PotentialFileBytes(pub Vec<u8>);
 
 pub fn get_all_potentials<P: AsRef<Path>, Q: AsRef<Path>>(
     base_cells: &[ExportFile<CellDocument, P>],

@@ -45,34 +45,29 @@ where
     if neighbours.len() == 1 {
         CoordResult::Empty
     } else {
-        let mut visited_pair: HashSet<[usize; 2]> = HashSet::new();
-        let sphere_neighbor_results: Vec<CoordResult> = neighbours
+        let mut sphere_neighbor_results: Vec<CoordResult> = neighbours
             .iter()
             .skip(1)
             .filter_map(|&&nb_id| {
                 let mut id_pair = [atom_id, nb_id];
                 id_pair.sort();
-                if visited_pair.insert(id_pair) {
-                    let nb_sphere = Sphere::new(*coord_tree.item(nb_id), radius);
-                    match sphere.intersect(&nb_sphere) {
-                        SphereSphereResult::Empty => None,
-                        SphereSphereResult::Point(p) => {
-                            let coord_point = MultiCoordPoint::new(p, id_pair.to_vec());
-                            coord_point
-                                .no_closer_atoms(coord_tree, radius)
-                                .map(CoordResult::SinglePoint)
-                        }
-                        SphereSphereResult::Circle(c) => {
-                            Some(CoordResult::Circle(CoordCircle::new(c, id_pair)))
-                        }
-                        SphereSphereResult::Overlap(_) => None,
+                let nb_sphere = Sphere::new(*coord_tree.item(nb_id), radius);
+                match sphere.intersect(&nb_sphere) {
+                    SphereSphereResult::Empty => None,
+                    SphereSphereResult::Point(p) => {
+                        let coord_point = MultiCoordPoint::new(p, id_pair.to_vec());
+                        coord_point
+                            .no_closer_atoms(coord_tree, radius)
+                            .map(CoordResult::SinglePoint)
                     }
-                } else {
-                    dbg!(id_pair);
-                    None
+                    SphereSphereResult::Circle(c) => {
+                        Some(CoordResult::Circle(CoordCircle::new(c, id_pair)))
+                    }
+                    SphereSphereResult::Overlap(_) => None,
                 }
             })
             .collect();
+        sphere_neighbor_results.dedup();
         CoordResult::Various(sphere_neighbor_results)
     }
 }

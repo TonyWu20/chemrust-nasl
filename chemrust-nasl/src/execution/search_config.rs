@@ -64,6 +64,8 @@ impl<'a> SearchConfig<'a> {
             CoordResult::Points(mut points) => coord_points.append(&mut points),
             _ => (),
         });
+        coord_circles.sort_by_key(|a| a.atom_ids());
+        coord_circles.dedup();
         CircleCheckResult::new(coord_circles, coord_points)
     }
 
@@ -80,7 +82,6 @@ impl<'a> SearchConfig<'a> {
         let dedup_points =
             MultiCoordPoint::dedup_points(&points, self.coord_tree(), self.bondlength);
         if !dedup_points.is_empty() {
-            println!("Special multi-coordinated sites search completed.");
             Some(dedup_points)
         } else {
             None
@@ -178,15 +179,18 @@ impl<'a> SearchConfig<'a> {
                 },
             )
             .collect();
-        let unchecked_circles: Vec<Vec<CoordCircle>> = results
+        let mut unchecked_circles: Vec<CoordCircle> = results
             .iter()
             .filter_map(|res| res.try_pull_circles_from_various().ok())
-            .collect();
+            .collect::<Vec<Vec<CoordCircle>>>()
+            .concat();
+        unchecked_circles.sort_by_key(|a| a.atom_ids());
+        unchecked_circles.dedup();
         let points: Vec<Vec<MultiCoordPoint>> = results
             .iter_mut()
             .filter_map(|res| res.try_pull_single_points_from_various().ok())
             .collect();
-        SphereCheckResult::new(points.concat(), unchecked_circles.concat())
+        SphereCheckResult::new(points.concat(), unchecked_circles)
     }
 }
 
