@@ -58,33 +58,35 @@ fn get_all_elements<P: AsRef<Path>>(
 
 pub fn get_potential_entries<P: AsRef<Path>>(
     cell_file: &ExportFile<CellDocument, P>,
-) -> Vec<String> {
-    cell_file
-        .file()
-        .other_entries()
-        .and_then(|v| {
-            v.iter()
-                .find(|entry| matches!(entry, CellEntries::SpeciesPot(_sp)))
-                .and_then(|entry| {
-                    if let CellEntries::SpeciesPot(sp) = entry {
-                        Some(
-                            sp.items()
-                                .iter()
-                                .map(|s| s.item())
-                                .cloned()
-                                .collect::<Vec<String>>(),
-                        )
-                    } else {
-                        None
-                    }
-                })
-        })
-        .unwrap_or(
-            cell_file
-                .file()
-                .get_elements()
-                .iter()
-                .map(|elm| ELEMENT_TABLE.get_by_symbol(*elm).potential().into())
-                .collect::<Vec<String>>(),
-        )
+) -> HashSet<String> {
+    HashSet::from_iter(
+        cell_file
+            .file()
+            .other_entries()
+            .and_then(|v| {
+                v.iter()
+                    .find(|entry| matches!(entry, CellEntries::SpeciesPot(_sp)))
+                    .and_then(|entry| {
+                        if let CellEntries::SpeciesPot(sp) = entry {
+                            Some(
+                                sp.items()
+                                    .iter()
+                                    .map(|s| s.item())
+                                    .cloned()
+                                    .collect::<Vec<String>>(),
+                            )
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .unwrap_or(
+                cell_file
+                    .file()
+                    .get_elements()
+                    .iter()
+                    .map(|elm| ELEMENT_TABLE.get_by_symbol(*elm).potential().into())
+                    .collect::<Vec<String>>(),
+            ),
+    )
 }
