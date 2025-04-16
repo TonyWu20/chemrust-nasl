@@ -21,6 +21,15 @@ pub struct Configurator {
     potentials_loc: PathBuf,
 }
 
+impl Configurator {
+    pub fn new(use_edft: bool, potentials_loc: PathBuf) -> Self {
+        Self {
+            use_edft,
+            potentials_loc,
+        }
+    }
+}
+
 impl CellBuilding for Configurator {}
 
 impl ParamBuilding for Configurator {
