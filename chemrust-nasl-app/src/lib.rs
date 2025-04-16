@@ -9,7 +9,7 @@ pub mod yaml_parser;
 use chemrust_core::data::lattice::CrystalModel;
 use chemrust_nasl::SearchReports;
 use error::RunError;
-pub use execution::{ExportFormat, ModelFormat, RhinoExport, SearchJob};
+pub use execution::{ExportFile, ExportFormat, ModelFormat, RhinoExport, SearchJob};
 pub use interactive_ui::KPointQuality;
 pub use yaml_parser::TaskTable;
 

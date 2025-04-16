@@ -6,10 +6,10 @@ use std::{
 
 use castep_cell_io::{CastepTask, CellDocument};
 use castep_seeding::{CellBuilding, ParamBuilding};
-use potentials_io::{get_all_potentials, get_potential_entries, PotentialFileBytes};
 use virt_files::{ContentStorage, FileModel};
 
 use crate::{error::RunError, execution::ExportFile};
+pub use potentials_io::{get_all_potentials, get_potential_entries, PotentialFileBytes};
 
 mod potentials_io;
 
