@@ -22,5 +22,5 @@ strum = "0.28"
 rayon = "1.10"
 
 [dev-dependencies]
-castep-cell-io = { path = "../../castep-cell-io/castep_cell_io" }
-castep-cell-fmt = { path = "../../castep-cell-io/castep_cell_fmt" }
+castep-cell-io = "0.7.0"
+castep-cell-fmt = "0.3.0"
