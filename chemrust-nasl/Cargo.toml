@@ -14,11 +14,13 @@ description = "New Adsorption Site Locator (NASL) for catalyst materials. Writte
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chemrust-core = "0.5.0"
+chemrust-geometry = "0.1.0"
 nalgebra = "0.33.*"
 kd-tree = {git  = "https://github.com/TonyWu20/kd-tree", features=["nalgebra" ]}
-castep-periodic-table = "0.5.2"
+elements_rs = { version = "0.2.8", default-features = false }
+strum = "0.28"
 rayon = "1.10"
 
 [dev-dependencies]
-castep-cell-io = {path = "../../castep-cell-io"}
+castep-cell-io = { path = "../../castep-cell-io/castep_cell_io" }
+castep-cell-fmt = { path = "../../castep-cell-io/castep_cell_fmt" }
