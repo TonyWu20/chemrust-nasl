@@ -1,4 +1,3 @@
-
 use nalgebra::{Point3, UnitVector3};
 
 use crate::geometry::primitives::{Circle3d, Sphere};
@@ -127,8 +126,6 @@ impl Intersect for Sphere {
 
 #[cfg(test)]
 mod test {
-
-    
 
     use nalgebra::Point3;
 

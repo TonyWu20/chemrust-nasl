@@ -11,10 +11,7 @@ use castep_cell_io::{
     },
     CellDocument,
 };
-use castep_periodic_table::{
-    data::ELEMENT_TABLE,
-    element::{ElementSymbol, LookupElement},
-};
+use castep_periodic_table::{data::ELEMENT_TABLE, element::LookupElement};
 
 use crate::{
     error::{FormatError, RunError},
@@ -43,17 +40,6 @@ pub fn get_all_potentials<P: AsRef<Path>, Q: AsRef<Path>>(
             })
             .collect::<Result<Vec<(String, PotentialFileBytes)>, RunError>>()?,
     ))
-}
-
-fn get_all_elements<P: AsRef<Path>>(
-    base_cells: &[ExportFile<CellDocument, P>],
-) -> HashSet<ElementSymbol> {
-    HashSet::from_iter(
-        base_cells
-            .iter()
-            .flat_map(|cell_doc| -> Vec<ElementSymbol> { cell_doc.file().get_elements() })
-            .collect::<Vec<ElementSymbol>>(),
-    )
 }
 
 pub fn get_potential_entries<P: AsRef<Path>>(

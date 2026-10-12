@@ -46,7 +46,7 @@ pub trait RhinoExport {
     fn create_all_sites<E: ExportFormat>(
         &self,
         base_model: &impl CrystalModel,
-        coord_sites: &[(impl CoordSite + Visualize)],
+        coord_sites: &[impl CoordSite + Visualize],
     ) -> Vec<ExportFile<E::Item, PathBuf>> {
         coord_sites
             .iter()

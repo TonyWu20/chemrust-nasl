@@ -28,7 +28,7 @@ impl RunOptions {
             .with_autocomplete(FilePathCompleter::default())
             .with_validator(required!("This field is required"))
             .with_validator(|input: &str| {
-                if input.split('.').last().unwrap() == "cell" {
+                if input.split('.').next_back().unwrap() == "cell" {
                     Ok(Validation::Valid)
                 } else {
                     Ok(Validation::Invalid(

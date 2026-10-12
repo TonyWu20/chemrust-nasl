@@ -17,7 +17,7 @@ impl Plane {
     }
     pub fn from_normal_and_point(normal: UnitVector3<f64>, point: Point3<f64>) -> Self {
         let op: Vector3<f64> = point - Point3::origin();
-        let d = normal.dot(&op) * -1.0;
+        let d = -normal.dot(&op);
         Self { normal, d }
     }
 

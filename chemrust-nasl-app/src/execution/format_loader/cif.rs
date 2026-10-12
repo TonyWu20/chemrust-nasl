@@ -10,6 +10,5 @@ pub fn load_cif_file<P: AsRef<Path>>(cif_path: P) -> Result<DataBlock, FormatErr
         .map_err(|_| FormatError::Compatible)?
         .data_blocks()
         .ok_or(FormatError::Compatible)
-        .and_then(|v| v.get(0).ok_or(FormatError::Missing))
-        .cloned()
+        .and_then(|v| v.first().cloned().ok_or(FormatError::Missing))
 }

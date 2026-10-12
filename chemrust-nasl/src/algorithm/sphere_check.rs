@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use nalgebra::Point3;
 
 use crate::geometry::{Intersect, Sphere, SphereSphereResult};
