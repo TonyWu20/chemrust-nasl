@@ -44,7 +44,7 @@ impl Circle3d {
     pub fn get_point_on_circle(&self, theta: f64) -> Point3<f64> {
         let (x, y, _z) = (self.n().x, self.n().y, self.n().z);
         // We want the v2 to act as the "z-axis" after transformation
-        let pre_v1 = Vector3::new(-1.0 * y, x, 0.0);
+        let pre_v1 = Vector3::new(-y, x, 0.0);
         let v1 = if pre_v1.norm_squared() < f64::EPSILON {
             // such v1 becomes a null vector when the normal is (0, 0, z)
             Vector3::x_axis()

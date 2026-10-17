@@ -1,4 +1,4 @@
-model_path: ../001RP1layer_Geo.cell
+model_path: ../scanner_test_models/SAC_GDY_V.cell
 new_element: Pd
 target_bondlength: 2.5
 x_range: [0.0, 1.0]
@@ -7,3 +7,4 @@ z_range: [0.4, 0.5]
 export_dir: demo/Pd_2.5_phosphorus
 kpoint_quality: Coarse
 edft: true
+build_seed: true

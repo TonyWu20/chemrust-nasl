@@ -1,4 +1,3 @@
-
 use nalgebra::{Point3, UnitVector3};
 
 use crate::geometry::primitives::{Line, Plane};

@@ -1,6 +1,7 @@
 # chemrust-nasl
 
-New Adsorption Site Locator (NASL) for catalyst materials. Written in `rust` for speed and stability. Part of the `chemrust` toolchain.
+Bond-length-constrained new available single-atom sites searching engine for any given structures
+Written in `rust` for speed and stability. Part of the `chemrust` toolchain.
 
 ## Introduction
 

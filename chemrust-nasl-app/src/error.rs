@@ -1,45 +1,34 @@
-use std::fmt::Display;
+use std::io;
 
-#[derive(Debug)]
+use castep_seeding::SeedingErrors;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum RunError {
+    #[error("{0}")]
     Message(String),
-    FormatError(FormatError),
-    IO,
+    #[error("{0}")]
+    FormatError(#[from] FormatError),
+    #[error("Error in creating directory: {0} ")]
+    CreateDir(#[from] io::Error),
+    #[error("No available results. You may check if the atoms in the `.cell` are too close to the boundary of the lattice. Adjust them to be within the lattice could help.")]
+    NoAvailableResults,
+    #[error("Failed to load yaml config")]
+    LoadYAML(#[from] serde_yaml::Error),
+    #[error("Error in creating seed files: {0}")]
+    SeedingError(#[from] SeedingErrors),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Error, Debug, Clone, Copy)]
 pub enum FormatError {
+    #[error("The file does not have extension suffix `.xxx`")]
     Identified,
+    #[error("This format is not supported")]
     Supported,
+    #[error("The file content is not compatible with the designated format")]
     Compatible,
+    #[error("Failed while reading to string")]
     ReadToString,
+    #[error("Required parts are missing")]
+    Missing,
 }
-
-impl Display for FormatError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FormatError::Supported => f.write_str("This format is not supported"),
-            FormatError::Compatible => {
-                f.write_str("The file content is not compatible with the format requirement")
-            }
-
-            FormatError::Identified => {
-                f.write_str("The file does not have extension suffix `.xxx`")
-            }
-            FormatError::ReadToString => f.write_str("Failed to read to string"),
-        }
-    }
-}
-
-impl Display for RunError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RunError::Message(m) => f.write_str(m),
-            RunError::FormatError(m) => write!(f, "{m}"),
-            RunError::IO => f.write_str("Error in IO operations"),
-        }
-    }
-}
-
-impl std::error::Error for RunError {}
-impl std::error::Error for FormatError {}
