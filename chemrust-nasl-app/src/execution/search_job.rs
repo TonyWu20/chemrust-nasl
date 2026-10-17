@@ -1,10 +1,12 @@
-use super::helpers::get_inbound_cartesian_coord;
-use chemrust_core::data::{atom::CoreAtomData, lattice::CrystalModel};
-
+use chemrust_geometry::Structure;
 use chemrust_nasl::{SearchConfig, SearchReports};
 use nalgebra::Point3;
 
-use crate::{error::RunError, supportive_data::FractionalCoordRange};
+use crate::error::RunError;
+use crate::supportive_data::FractionalCoordRange;
+
+use super::helpers::get_inbound_cartesian_coord;
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Axis {
     X,
@@ -15,45 +17,43 @@ pub enum Axis {
 pub trait SearchJob {
     fn target_bondlength(&self) -> f64;
     fn search_range(&self, axis: Axis) -> FractionalCoordRange;
-    fn get_to_check_atom<C: CrystalModel>(&self, model: &C) -> Vec<(usize, Point3<f64>)> {
+    fn get_to_check_atom(&self, model: &Structure) -> Vec<(usize, Point3<f64>)> {
         let x_range = self.search_range(Axis::X);
         let y_range = self.search_range(Axis::Y);
         let z_range = self.search_range(Axis::Z);
         model
-            .get_atom_data()
-            .coords_repr()
+            .frac_coords
             .iter()
             .enumerate()
-            .filter_map(|(i, cd)| {
+            .filter_map(|(i, coord)| {
                 get_inbound_cartesian_coord(
-                    cd,
+                    coord,
                     x_range,
                     y_range,
                     z_range,
-                    model.get_cell_parameters(),
+                    model.cell.as_ref().expect("the model carries a lattice"),
                 )
                 .map(|p| (i, p))
             })
             .collect()
     }
-    fn all_atoms<C: CrystalModel>(&self, model: &C) -> Vec<Point3<f64>> {
+    fn all_atoms(&self, model: &Structure) -> Vec<Point3<f64>> {
         let all_range = FractionalCoordRange::new(0.0, 1.0);
         model
-            .get_atom_data()
-            .coords_repr()
+            .frac_coords
             .iter()
-            .filter_map(|cd| {
+            .filter_map(|coord| {
                 get_inbound_cartesian_coord(
-                    cd,
+                    coord,
                     all_range,
                     all_range,
                     all_range,
-                    model.get_cell_parameters(),
+                    model.cell.as_ref().expect("the model carries a lattice"),
                 )
             })
             .collect()
     }
-    fn search<C: CrystalModel>(&self, model: &C) -> Result<SearchReports, RunError> {
+    fn search(&self, model: &Structure) -> Result<SearchReports, RunError> {
         let to_check = self.get_to_check_atom(model);
         let all_atoms = self.all_atoms(model);
         let search_config = SearchConfig::new(&to_check, &all_atoms, self.target_bondlength());

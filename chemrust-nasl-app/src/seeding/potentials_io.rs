@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use castep_cell_io::{
+use castep_cell_io_v02::{
     cell_document::{
         sections::species_characters::{SpeciesBlock, SpeciesEntry},
         CellEntries,

@@ -2,15 +2,14 @@
 use std::fs::{self, create_dir};
 
 use anyhow::Result;
-use castep_cell_io::cell_document::CellDocument;
-use chemrust_core::data::lattice::CrystalModel;
+use chemrust_geometry::Structure;
 use clap::Parser;
 
 use castep_seeding::RootJobs;
 use rhino_lib::{
     arg_parser::{Args, ProgramMode},
     interactive_ui::RunOptions,
-    run, CifExport, ModelFormat, RhinoExport, SearchJob, TaskTable,
+    run, CellExport, CifExport, ModelFormat, RhinoExport, SearchJob, TaskTable,
 };
 
 fn main() -> Result<()> {
@@ -23,13 +22,13 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn search_n_export<C: CrystalModel>(
-    base_model: &C,
+fn search_n_export(
+    base_model: &Structure,
     search_job: &impl SearchJob,
     rhino_export: &impl RhinoExport,
 ) -> Result<()> {
     let results = run(base_model, search_job)?;
-    rhino_export.export_all_kinds_sites::<CellDocument>(base_model, &results)?;
+    rhino_export.export_all_kinds_sites::<CellExport>(base_model, &results)?;
     rhino_export.export_all_kinds_sites::<CifExport>(base_model, &results)?;
     Ok(())
 }

@@ -1281,11 +1281,13 @@ name = "rhino"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "castep-cell-fmt",
  "castep-cell-io 0.2.18",
+ "castep-cell-io 0.7.0",
  "castep-param-io",
  "castep-periodic-table",
  "castep-seeding",
- "chemrust-core",
+ "chemrust-geometry",
  "chemrust-nasl",
  "clap",
  "crystal-cif-io",

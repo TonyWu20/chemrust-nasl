@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use castep_cell_io::{CastepTask, CellDocument};
+use castep_cell_io_v02::{CastepTask, CellDocument, EnergyCutoff};
 use castep_seeding::{CellBuilding, ParamBuilding};
 
 use crate::{error::RunError, execution::ExportFile};
@@ -34,19 +34,19 @@ impl CellBuilding for Configurator {}
 impl ParamBuilding for Configurator {
     fn build_param_for_task(
         &self,
-        template_cell: &castep_cell_io::CellDocument,
-        castep_task: castep_cell_io::CastepTask,
+        template_cell: &CellDocument,
+        castep_task: CastepTask,
     ) -> Result<castep_param_io::param::CastepParam, castep_seeding::SeedingErrors> {
         match castep_task {
-            castep_cell_io::CastepTask::BandStructure => self.dos_param_template(
+            CastepTask::BandStructure => self.dos_param_template(
                 template_cell,
-                castep_cell_io::EnergyCutoff::Ultrafine,
+                EnergyCutoff::Ultrafine,
                 self.use_edft,
                 &self.potentials_loc,
             ),
-            castep_cell_io::CastepTask::GeometryOptimization => self.geom_opt_param_template(
+            CastepTask::GeometryOptimization => self.geom_opt_param_template(
                 template_cell,
-                castep_cell_io::EnergyCutoff::Ultrafine,
+                EnergyCutoff::Ultrafine,
                 self.use_edft,
                 &self.potentials_loc,
             ),

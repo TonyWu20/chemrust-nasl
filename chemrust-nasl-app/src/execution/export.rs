@@ -4,10 +4,12 @@ use std::path::PathBuf;
 use std::{fmt::Display, path::Path};
 
 use castep_periodic_table::element::ElementSymbol;
-use chemrust_core::data::lattice::CrystalModel;
+use chemrust_geometry::Structure;
 use chemrust_nasl::{CoordSite, SearchReports, Visualize};
 
 use crate::error::RunError;
+
+use super::model::{cell_export_text, cif_export_text};
 
 #[derive(Debug, Clone)]
 pub struct ExportFile<T: Display, P: AsRef<Path>> {
@@ -45,7 +47,7 @@ pub trait RhinoExport {
     }
     fn create_all_sites<E: ExportFormat>(
         &self,
-        base_model: &impl CrystalModel,
+        base_model: &Structure,
         coord_sites: &[impl CoordSite + Visualize],
     ) -> Vec<ExportFile<E::Item, PathBuf>> {
         coord_sites
@@ -55,7 +57,7 @@ pub trait RhinoExport {
     }
     fn create_each_site<E: ExportFormat>(
         &self,
-        base_model: &impl CrystalModel,
+        base_model: &Structure,
         coord_site: &(impl CoordSite + Visualize),
     ) -> ExportFile<E::Item, PathBuf> {
         ExportFile::new(
@@ -65,7 +67,7 @@ pub trait RhinoExport {
     }
     fn export_all_kinds_sites<E: ExportFormat>(
         &self,
-        base_model: &impl CrystalModel,
+        base_model: &Structure,
         search_reports: &SearchReports,
     ) -> Result<(), RunError> {
         if let Some(points) = search_reports.viable_single_points() {
@@ -105,30 +107,61 @@ pub trait RhinoExport {
 /// `crystal-cif-io` 0.2 data block and writes it as CIF text.
 pub struct CifExport;
 
+/// The `.cell` export item. The `ExportFormat` impl builds one
+/// `castep-cell-io` 0.7 document and writes it as CASTEP text.
+pub struct CellExport;
+
 pub trait ExportFormat {
     type Item: Display;
     fn suffix() -> String;
     fn add_new_site(
-        base_model: &impl CrystalModel,
+        base_model: &Structure,
         coord_site: &(impl CoordSite + Visualize),
         element_symbol: &ElementSymbol,
     ) -> Self::Item;
 }
 
+impl ExportFormat for CifExport {
+    type Item = String;
+    fn add_new_site(
+        base_model: &Structure,
+        coord_site: &(impl CoordSite + Visualize),
+        element_symbol: &ElementSymbol,
+    ) -> Self::Item {
+        let new_name = format!("new_{}", coord_site.connecting_atoms_msg());
+        cif_export_text(base_model, coord_site, element_symbol, &new_name)
+    }
+
+    fn suffix() -> String {
+        "cif".to_string()
+    }
+}
+
+impl ExportFormat for CellExport {
+    type Item = String;
+    fn add_new_site(
+        base_model: &Structure,
+        coord_site: &(impl CoordSite + Visualize),
+        element_symbol: &ElementSymbol,
+    ) -> Self::Item {
+        cell_export_text(base_model, coord_site, element_symbol)
+    }
+
+    fn suffix() -> String {
+        "cell".to_string()
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use castep_cell_io::cell_document::CellDocument;
     use crystal_cif_io::parse_core_cif;
 
+    use crate::execution::model::cif_to_structure;
     use crate::execution::search_job::SearchJob;
 
-    use crate::{
-        error::{FormatError, RunError},
-        execution::cif_model::CifModel,
-        ModelFormat, TaskTable,
-    };
+    use crate::{error::RunError, ModelFormat, TaskTable};
 
-    use super::{CifExport, ExportFormat, RhinoExport};
+    use super::{CellExport, CifExport, ExportFormat, RhinoExport};
 
     #[test]
     fn export_traits() -> Result<(), RunError> {
@@ -137,13 +170,13 @@ mod test {
         let model = ModelFormat::load_model(task_table.model_path())
             .ok()
             .unwrap();
-        let cell = model.as_cell().unwrap();
-        let results = task_table.search_config().search(cell)?;
+        let structure = model.as_model();
+        let results = task_table.search_config().search(structure)?;
         assert!(task_table
-            .export_all_kinds_sites::<CellDocument>(cell, &results)
+            .export_all_kinds_sites::<CellExport>(structure, &results)
             .is_ok());
         assert!(task_table
-            .export_all_kinds_sites::<CifExport>(cell, &results)
+            .export_all_kinds_sites::<CifExport>(structure, &results)
             .is_ok());
         Ok(())
     }
@@ -161,12 +194,10 @@ mod test {
         let table = TaskTable::load_task_table("example_task.yaml")?;
         let config = table.search_config();
         let cif = ModelFormat::load_model("../scanner_test_models/CuTP001.cif")?
-            .as_cif()
-            .expect("the model loads as a CIF data block")
+            .as_model()
             .clone();
         let cell = ModelFormat::load_model("../scanner_test_models/CuTP001.cell")?
-            .as_cell()
-            .expect("the model loads as a CASTEP cell")
+            .as_model()
             .clone();
         let cif_results = config.search(&cif).ok();
         let cell_results = config.search(&cell).ok();
@@ -182,8 +213,7 @@ mod test {
         let table = TaskTable::load_task_table("example_task.yaml")?;
         let config = table.search_config();
         let model = ModelFormat::load_model(table.model_path())?
-            .as_cell()
-            .expect("the example task points at a .cell model")
+            .as_model()
             .clone();
         let results = config.search(&model)?;
         let single_sites = results
@@ -199,11 +229,11 @@ mod test {
             .blocks
             .first()
             .cloned()
-            .ok_or(RunError::FormatError(FormatError::Missing))?;
+            .ok_or(crate::error::FormatError::Missing)?;
         // Drop the exported adsorbate row. The search sees the base model.
         block.atom_site.pop();
         let cif_model =
-            CifModel::from_block(&block).map_err(|error| RunError::Message(error.to_string()))?;
+            cif_to_structure(&block).map_err(|error| RunError::Message(error.to_string()))?;
         let cif_results = config.search(&cif_model)?;
         // SAC_GDY_V at 2.5 A bond length, z in [0.4, 0.5], finds
         // 24 single, 51 double, and 19 multi sites.

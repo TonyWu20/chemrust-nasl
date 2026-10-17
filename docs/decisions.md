@@ -84,3 +84,35 @@ Open item: the lib crate (`chemrust-nasl`) is migrated to
 crate still depends on `chemrust-core` and `castep-periodic-table`
 through the search engine and this bridge. A full de-castep of the
 search engine is a separate, larger task.
+
+## App crate: off chemrust-core onto chemrust-geometry Structure
+
+Date: 2026-07-10
+
+`chemrust-core` is deprecated; `chemrust-geometry` is its successor. The
+successor does not carry the `CrystalModel`/`CoreAtomData` trait pair.
+Its model is the concrete `Structure` type (species, fractional
+coordinates, `LatticeVectors`). The app crate's model layer now runs
+on it:
+
+- `execution/model.rs` converts between `Structure` and the two file
+  formats. `cell_to_structure` reads a `castep-cell-io` 0.7
+  `CellDocument` (lattice plus per-entry species).
+  `cif_to_structure` reads a `crystal-cif-io` 0.2 `CoreCif`. Both
+  export directions build CIF text and CASTEP text from a `Structure`
+  plus one new adsorbate site.
+- `SearchJob`, `ExportFormat`, and `RhinoExport` all take a
+  `Structure`. The `.cell` I/O moved from `castep-cell-io` 0.2.18 to
+  0.7.0 with `castep-cell-fmt` 0.3.0 parsing and writing.
+- The seeding seam (`castep-seeding` traits, `RootJobs`, `build_all`)
+  still compiles against the 0.2.18 castep stack through a renamed
+  dependency `castep_cell_io_v02`. It stays there until
+  `castep-seeding` ships a release on the 0.7 stack.
+- `Cargo.lock` still lists `chemrust-core 0.5.1` transitively
+  (`castep-seeding` -> `castep-cell-io` 0.2.18 -> `chemrust-core`).
+  The app no longer depends on it directly.
+
+Verification: the round-trip test searches `SAC_GDY_V.cell` through
+the 0.7 parser (24 single, 51 double, 19 multi sites at 2.5 A),
+exports one site as CIF, re-parses it, and re-runs the search. The
+counts match. The lib crate's 73/93/26 baseline is unchanged.

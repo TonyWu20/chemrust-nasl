@@ -1,22 +1,9 @@
-use castep_periodic_table::element::ElementSymbol;
-use chemrust_core::data::lattice::{CrystalModel, UnitCellParameters};
-use chemrust_nasl::{CoordSite, Visualize};
-use crystal_cif_io::write_core_cif;
+use chemrust_geometry::Structure;
 use std::path::Path;
 
-use castep_cell_io::{
-    cell_document::{CellDocument, IonicPosition},
-    to_cell_document,
-};
-
 use crate::error::{FormatError, RunError};
-use crate::execution::cif_model::{export_block, CifModel};
 
-use super::{
-    export::{CifExport, ExportFormat},
-    format_loader::load_cif_file,
-    load_cell_file,
-};
+use super::{format_loader::load_cif_file, load_cell_file};
 
 #[derive(Debug, Clone, Copy)]
 pub enum AcceptFormat {
@@ -40,10 +27,11 @@ impl AcceptFormat {
     }
 }
 
+/// A loaded model, as a `chemrust-geometry` `Structure`.
 #[derive(Debug, Clone)]
 pub enum ModelFormat {
-    Cell(CellDocument),
-    Cif(CifModel),
+    Cell(Structure),
+    Cif(Structure),
 }
 
 impl ModelFormat {
@@ -60,60 +48,9 @@ impl ModelFormat {
         }
     }
 
-    pub fn as_cell(&self) -> Option<&CellDocument> {
-        if let Self::Cell(v) = self {
-            Some(v)
-        } else {
-            None
+    pub fn as_model(&self) -> &Structure {
+        match self {
+            Self::Cell(v) | Self::Cif(v) => v,
         }
-    }
-
-    pub fn as_cif(&self) -> Option<&CifModel> {
-        if let Self::Cif(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
-
-impl ExportFormat for CellDocument {
-    type Item = CellDocument;
-    fn add_new_site(
-        base_model: &impl CrystalModel,
-        coord_site: &(impl CoordSite + Visualize),
-        element_symbol: &ElementSymbol,
-    ) -> Self::Item {
-        let mut new_cell: CellDocument = to_cell_document(base_model);
-        let new_pos_coordinate =
-            coord_site.fractional_coord(base_model.get_cell_parameters().lattice_bases());
-        let new_pos = IonicPosition::new(*element_symbol, new_pos_coordinate.into(), None);
-        new_cell
-            .model_description_mut()
-            .ionic_pos_block_mut()
-            .positions_mut()
-            .push(new_pos);
-        new_cell
-    }
-
-    fn suffix() -> String {
-        "cell".to_string()
-    }
-}
-
-impl ExportFormat for CifExport {
-    type Item = String;
-    fn add_new_site(
-        base_model: &impl CrystalModel,
-        coord_site: &(impl CoordSite + Visualize),
-        element_symbol: &ElementSymbol,
-    ) -> Self::Item {
-        let new_name = format!("new_{}", coord_site.connecting_atoms_msg());
-        let block = export_block(base_model, coord_site, element_symbol, &new_name);
-        write_core_cif(std::slice::from_ref(&block))
-    }
-
-    fn suffix() -> String {
-        "cif".to_string()
     }
 }

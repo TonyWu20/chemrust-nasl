@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use castep_cell_io::{cell_document::CellDocument, CastepTask, CellParser};
+use castep_cell_io_v02::{cell_document::CellDocument, CastepTask, CellParser};
 use castep_param_io::param::CastepParam;
 use castep_periodic_table::{
     data::ELEMENT_TABLE,
@@ -165,7 +165,7 @@ where
         self.cell_path.as_ref().parent().unwrap()
     }
 
-    fn cell_template(&self) -> &castep_cell_io::cell_document::CellDocument {
+    fn cell_template(&self) -> &castep_cell_io_v02::cell_document::CellDocument {
         &self.cell_doc
     }
 }
@@ -194,15 +194,15 @@ impl ParamBuilding for ExportConfig {
         castep_task: CastepTask,
     ) -> Result<CastepParam, SeedingErrors> {
         match castep_task {
-            castep_cell_io::CastepTask::BandStructure => self.dos_param_template(
+            castep_cell_io_v02::CastepTask::BandStructure => self.dos_param_template(
                 template_cell,
-                castep_cell_io::EnergyCutoff::Ultrafine,
+                castep_cell_io_v02::EnergyCutoff::Ultrafine,
                 self.edft,
                 self.potential_loc(),
             ),
-            castep_cell_io::CastepTask::GeometryOptimization => self.geom_opt_param_template(
+            castep_cell_io_v02::CastepTask::GeometryOptimization => self.geom_opt_param_template(
                 template_cell,
-                castep_cell_io::EnergyCutoff::Ultrafine,
+                castep_cell_io_v02::EnergyCutoff::Ultrafine,
                 self.edft,
                 self.potential_loc(),
             ),
