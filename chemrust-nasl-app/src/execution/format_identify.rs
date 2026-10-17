@@ -1,26 +1,22 @@
 use castep_periodic_table::element::ElementSymbol;
-use chemrust_core::data::{
-    atom::CoreAtomData,
-    geom::coordinates::CoordData,
-    lattice::{CrystalModel, UnitCellParameters},
-};
+use chemrust_core::data::lattice::{CrystalModel, UnitCellParameters};
 use chemrust_nasl::{CoordSite, Visualize};
+use crystal_cif_io::write_core_cif;
 use std::path::Path;
 
 use castep_cell_io::{
     cell_document::{CellDocument, IonicPosition},
     to_cell_document,
 };
-use crystal_cif_io::{
-    data_dict::core_cif::{
-        atom_site::chemrust_impl::from_atom_data, cell::chemrust_impl::from_unit_cell_parameters,
-    },
-    from_data_block_members, CifDocument, DataBlock,
-};
 
 use crate::error::{FormatError, RunError};
+use crate::execution::cif_model::{export_block, CifModel};
 
-use super::{export::ExportFormat, format_loader::load_cif_file, load_cell_file};
+use super::{
+    export::{CifExport, ExportFormat},
+    format_loader::load_cif_file,
+    load_cell_file,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum AcceptFormat {
@@ -47,7 +43,7 @@ impl AcceptFormat {
 #[derive(Debug, Clone)]
 pub enum ModelFormat {
     Cell(CellDocument),
-    CifDataBlock(DataBlock),
+    Cif(CifModel),
 }
 
 impl ModelFormat {
@@ -58,7 +54,7 @@ impl ModelFormat {
             AcceptFormat::Cell => Ok(ModelFormat::Cell(
                 load_cell_file(model_path).map_err(RunError::FormatError)?,
             )),
-            AcceptFormat::Cif => Ok(ModelFormat::CifDataBlock(
+            AcceptFormat::Cif => Ok(ModelFormat::Cif(
                 load_cif_file(model_path).map_err(RunError::FormatError)?,
             )),
         }
@@ -72,8 +68,8 @@ impl ModelFormat {
         }
     }
 
-    pub fn as_cif_data_block(&self) -> Option<&DataBlock> {
-        if let Self::CifDataBlock(v) = self {
+    pub fn as_cif(&self) -> Option<&CifModel> {
+        if let Self::Cif(v) = self {
             Some(v)
         } else {
             None
@@ -86,7 +82,7 @@ impl ExportFormat for CellDocument {
     fn add_new_site(
         base_model: &impl CrystalModel,
         coord_site: &(impl CoordSite + Visualize),
-        element_symbol: &castep_periodic_table::element::ElementSymbol,
+        element_symbol: &ElementSymbol,
     ) -> Self::Item {
         let mut new_cell: CellDocument = to_cell_document(base_model);
         let new_pos_coordinate =
@@ -105,57 +101,16 @@ impl ExportFormat for CellDocument {
     }
 }
 
-impl ExportFormat for DataBlock {
-    type Item = CifDocument;
+impl ExportFormat for CifExport {
+    type Item = String;
     fn add_new_site(
         base_model: &impl CrystalModel,
         coord_site: &(impl CoordSite + Visualize),
-        element_symbol: &castep_periodic_table::element::ElementSymbol,
+        element_symbol: &ElementSymbol,
     ) -> Self::Item {
-        let atom_data = base_model.get_atom_data();
-        struct NewData {
-            indices: Vec<usize>,
-            symbols: Vec<ElementSymbol>,
-            coords: Vec<CoordData>,
-            labels: Vec<Option<String>>,
-        }
-        impl CoreAtomData for NewData {
-            fn indices_repr(&self) -> Vec<usize> {
-                self.indices.clone()
-            }
-
-            fn symbols_repr(&self) -> Vec<ElementSymbol> {
-                self.symbols.clone()
-            }
-
-            fn coords_repr(&self) -> Vec<CoordData> {
-                self.coords.clone()
-            }
-
-            fn labels_repr(&self) -> Vec<Option<String>> {
-                self.labels.clone()
-            }
-        }
-        let mut new_data = NewData {
-            indices: atom_data.indices_repr(),
-            symbols: atom_data.symbols_repr(),
-            coords: atom_data.coords_repr(),
-            labels: atom_data.labels_repr(),
-        };
-        let new_index = new_data.indices.len();
-        new_data.indices.push(new_index);
-        new_data.symbols.push(*element_symbol);
-        new_data.coords.push(CoordData::Fractional(
-            coord_site.fractional_coord(base_model.get_cell_parameters().lattice_bases()),
-        ));
-        new_data
-            .labels
-            .push(Some(format!("{}{}", element_symbol, new_index)));
         let new_name = format!("new_{}", coord_site.connecting_atoms_msg());
-        let new_cell_block = from_unit_cell_parameters(base_model.get_cell_parameters());
-        let new_data_block = from_atom_data(&new_data);
-        let new_block = [new_cell_block, new_data_block].concat();
-        from_data_block_members(&new_block, &new_name)
+        let block = export_block(base_model, coord_site, element_symbol, &new_name);
+        write_core_cif(std::slice::from_ref(&block))
     }
 
     fn suffix() -> String {

@@ -48,3 +48,39 @@ migrating the workspace to the successor crate stack.
 - `ask_potential_dir` offers `e.g.: /path/Potentials` as its
   default. Accepting it writes the prefix into the path.
 - Add a CI workflow.
+
+## App crate: crystal-cif-io 0.2.0 and the CIF model bridge
+
+Date: 2026-07-10
+
+The app crate (`chemrust-nasl-app`, binary `rhino`) now builds against the
+published `crystal-cif-io 0.2.0` instead of the git dev 0.1.2. The 0.2.0
+line split the generic `DataBlock` world into a typed `CoreCif` layer:
+`parse_core_cif` returns `CoreCifDocument { blocks: Vec<CoreCif> }`, and
+the 0.1.x `chemrust` bridge feature is gone.
+
+The search engine still consumes `chemrust-core` traits
+(`CrystalModel`, `CoreAtomData`). The new `execution/cif_model.rs` module
+is the bridge between the two:
+
+- `CifModel` owns a `LatticeVectors` and a `CifAtomData` (castep
+  `ElementSymbol` symbols, `CoordData` coordinates, labels) read from a
+  `CoreCif` cell items plus `atom_site` rows.
+- CIF cell items carry Angstrom lengths and degree angles. Missing
+  angles default to 90. Rows need fractional or Cartesian coordinates
+  and a castep-known symbol.
+- `CifExport` (in `execution/export.rs`) is the export item for the CIF
+  path. It builds one `CoreCif` data block from the model atoms plus
+  the new adsorbate site and writes it with `write_core_cif`. The rows
+  carry labels, symbols, and coordinates only.
+
+Verification: the round-trip test in `execution/export.rs` searches
+`SAC_GDY_V.cell` (24 single, 51 double, 19 multi sites at 2.5 A with
+z in [0.4, 0.5]), exports one site as CIF text, re-parses it, and
+re-runs the search. The counts match the cell-model search exactly.
+
+Open item: the lib crate (`chemrust-nasl`) is migrated to
+`chemrust-geometry` and `elements_rs` (Decision A above). The app
+crate still depends on `chemrust-core` and `castep-periodic-table`
+through the search engine and this bridge. A full de-castep of the
+search engine is a separate, larger task.

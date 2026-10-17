@@ -5,13 +5,12 @@ use anyhow::Result;
 use castep_cell_io::cell_document::CellDocument;
 use chemrust_core::data::lattice::CrystalModel;
 use clap::Parser;
-use crystal_cif_io::DataBlock;
 
 use castep_seeding::RootJobs;
 use rhino_lib::{
     arg_parser::{Args, ProgramMode},
     interactive_ui::RunOptions,
-    run, ModelFormat, RhinoExport, SearchJob, TaskTable,
+    run, CifExport, ModelFormat, RhinoExport, SearchJob, TaskTable,
 };
 
 fn main() -> Result<()> {
@@ -31,7 +30,7 @@ fn search_n_export<C: CrystalModel>(
 ) -> Result<()> {
     let results = run(base_model, search_job)?;
     rhino_export.export_all_kinds_sites::<CellDocument>(base_model, &results)?;
-    rhino_export.export_all_kinds_sites::<DataBlock>(base_model, &results)?;
+    rhino_export.export_all_kinds_sites::<CifExport>(base_model, &results)?;
     Ok(())
 }
 
@@ -44,8 +43,8 @@ fn run_by_table(yaml_table: &TaskTable) -> Result<()> {
         ModelFormat::Cell(cell_document) => {
             search_n_export(cell_document, yaml_table.search_config(), yaml_table)
         }
-        ModelFormat::CifDataBlock(data_block) => {
-            search_n_export(data_block, yaml_table.search_config(), yaml_table)
+        ModelFormat::Cif(cif_model) => {
+            search_n_export(cif_model, yaml_table.search_config(), yaml_table)
         }
     }?;
     if yaml_table.export_config().build_seed() {
