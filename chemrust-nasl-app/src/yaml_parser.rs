@@ -1,15 +1,15 @@
-use std::{
-    fs::read_to_string,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
-use castep_cell_io_v02::{cell_document::CellDocument, CastepTask, CellParser};
-use castep_param_io::param::CastepParam;
+use castep_cell_io::CellDocument;
 use castep_periodic_table::{
     data::ELEMENT_TABLE,
     element::{Element, ElementSymbol, LookupElement},
 };
-use castep_seeding::{CellBuilding, ParamBuilding, RootJobs, SeedFolder, SeedingErrors};
+use castep_seeding::param::CastepParam;
+use castep_seeding::{
+    parse_cell_doc_from_path, CastepTask, CellBuilding, EnergyCutoff, ParamBuilding, RootJobs,
+    SeedFolder, SeedingErrors,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -137,10 +137,7 @@ struct Seed<P: AsRef<Path>> {
 
 impl<P: AsRef<Path>> Seed<P> {
     fn from_cell_path(cell_path: P) -> Result<Self, SeedingErrors> {
-        let cell_content = read_to_string(&cell_path).map_err(SeedingErrors::ReadToString)?;
-        let cell_doc = CellParser::from(&cell_content)
-            .parse()
-            .map_err(SeedingErrors::CellParseError)?;
+        let cell_doc = parse_cell_doc_from_path(&cell_path)?;
         Ok(Self {
             cell_path,
             cell_doc,
@@ -165,7 +162,7 @@ where
         self.cell_path.as_ref().parent().unwrap()
     }
 
-    fn cell_template(&self) -> &castep_cell_io_v02::cell_document::CellDocument {
+    fn cell_template(&self) -> &CellDocument {
         &self.cell_doc
     }
 }
@@ -194,18 +191,19 @@ impl ParamBuilding for ExportConfig {
         castep_task: CastepTask,
     ) -> Result<CastepParam, SeedingErrors> {
         match castep_task {
-            castep_cell_io_v02::CastepTask::BandStructure => self.dos_param_template(
+            CastepTask::BandStructure => self.dos_param_template(
                 template_cell,
-                castep_cell_io_v02::EnergyCutoff::Ultrafine,
+                EnergyCutoff::Ultrafine,
                 self.edft,
                 self.potential_loc(),
             ),
-            castep_cell_io_v02::CastepTask::GeometryOptimization => self.geom_opt_param_template(
+            CastepTask::GeometryOptimization => self.geom_opt_param_template(
                 template_cell,
-                castep_cell_io_v02::EnergyCutoff::Ultrafine,
+                EnergyCutoff::Ultrafine,
                 self.edft,
                 self.potential_loc(),
             ),
+            _ => unreachable!("only BandStructure and GeometryOptimization are seeded"),
         }
     }
 }

@@ -32,12 +32,10 @@ migrating the workspace to the successor crate stack.
 
 ## Open items
 
-- Migrate `rhino` to the new stack: `castep-cell-io 0.7.0`,
-  `crystal-cif-io dev-0.2` (elements_rs based), and a successor
-  to `castep-seeding`. This rewrites `format_loader`, `export`,
-  `seeding`, and the element plumbing. `elements_rs` provides no
-  CASTEP potential-name lookup, so the seeding flow needs that
-  data from another source.
+- The `rhino` app-crate migration to the new stack is done. See
+  the app-crate entries below. `elements_rs` still provides no
+  CASTEP potential-name lookup. The seeding flow gets it from the
+  `castep-periodic-table` lookup instead.
 - Refresh the README: the binary is `rhino`, the config example
   lacks `build_seed` and `potential_dir`, and several claims
   (browser use, binary download site) do not match the repo.
@@ -79,11 +77,9 @@ Verification: the round-trip test in `execution/export.rs` searches
 z in [0.4, 0.5]), exports one site as CIF text, re-parses it, and
 re-runs the search. The counts match the cell-model search exactly.
 
-Open item: the lib crate (`chemrust-nasl`) is migrated to
-`chemrust-geometry` and `elements_rs` (Decision A above). The app
-crate still depends on `chemrust-core` and `castep-periodic-table`
-through the search engine and this bridge. A full de-castep of the
-search engine is a separate, larger task.
+Note: the app-crate `chemrust-core` dependency named here was
+removed in the next entry. The app now runs on `chemrust-geometry`
+and the `castep-periodic-table` symbol table.
 
 ## App crate: off chemrust-core onto chemrust-geometry Structure
 
@@ -104,15 +100,48 @@ on it:
 - `SearchJob`, `ExportFormat`, and `RhinoExport` all take a
   `Structure`. The `.cell` I/O moved from `castep-cell-io` 0.2.18 to
   0.7.0 with `castep-cell-fmt` 0.3.0 parsing and writing.
-- The seeding seam (`castep-seeding` traits, `RootJobs`, `build_all`)
-  still compiles against the 0.2.18 castep stack through a renamed
-  dependency `castep_cell_io_v02`. It stays there until
-  `castep-seeding` ships a release on the 0.7 stack.
-- `Cargo.lock` still lists `chemrust-core 0.5.1` transitively
-  (`castep-seeding` -> `castep-cell-io` 0.2.18 -> `chemrust-core`).
-  The app no longer depends on it directly.
+- The seeding seam (`castep-seeding` traits, `RootJobs`,
+  `build_all`) sat on the 0.2.18 stack through a renamed dependency
+  `castep_cell_io_v02` at this point. The next entry records its
+  removal.
 
 Verification: the round-trip test searches `SAC_GDY_V.cell` through
 the 0.7 parser (24 single, 51 double, 19 multi sites at 2.5 A),
 exports one site as CIF, re-parses it, and re-runs the search. The
 counts match. The lib crate's 73/93/26 baseline is unchanged.
+
+## castep-seeding 0.2.0: the seeding seam moves to the 0.7 stack
+
+Date: 2026-07-10
+
+The `castep-seeding` repo was migrated in its own `dev` branch
+(commit `1264694`, pushed): published `castep-cell-io 0.7.0` plus
+`castep-cell-fmt 0.3.0` for parsing and writing, the param model
+inlined from `castep-param-io` into `src/param`, a local
+`EnergyCutoff` module replacing the 0.2.18 one, and `CellDocument`
+helpers (`cell_elements`, `total_spin`, `species_params_for`,
+`cell_to_string`) carrying over the 0.2.18 semantics. Its
+`CastepTask` gained a `SinglePoint` variant under
+`#[non_exhaustive]`.
+
+In this repo the app crate now consumes it:
+
+- `castep-seeding = { git = "https://github.com/TonyWu20/castep-seeding",
+  rev = "1264694..." }` pins the pushed commit. The dependency is
+  still a git dep because no 0.7-stack release is published. It
+  swaps to a registry dep when one lands.
+- The `castep_cell_io_v02` alias and the `castep-cell-io 0.2.18`
+  and `castep-param-io` dependencies are removed.
+  `CastepTask`, `EnergyCutoff`, `CastepParam`, and
+  `parse_cell_doc_from_path` all come from `castep-seeding` now.
+- `ExportFile` drops its `T: Display` bound. The 0.7 `CellDocument`
+  has no `Display` impl, and the seeding flow serializes it through
+  `castep_seeding::cell_to_string`.
+- Task matches gain a wildcard arm because `CastepTask` is
+  `#[non_exhaustive]`.
+
+Verification: `cargo test -p chemrust-nasl` passes 6 tests
+(including the 73/93/26 search baseline) and `cargo test -p rhino`
+passes 4 (including the 24/51/19 CIF round-trip). `Cargo.lock`
+carries no `chemrust-core` and no `castep-cell-io 0.2.18` entry
+anymore.

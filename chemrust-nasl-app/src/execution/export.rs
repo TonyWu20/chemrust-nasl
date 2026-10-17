@@ -12,12 +12,12 @@ use crate::error::RunError;
 use super::model::{cell_export_text, cif_export_text};
 
 #[derive(Debug, Clone)]
-pub struct ExportFile<T: Display, P: AsRef<Path>> {
+pub struct ExportFile<T, P: AsRef<Path>> {
     file: T,
     file_name: P,
 }
 
-impl<T: Display, P: AsRef<Path>> ExportFile<T, P> {
+impl<T, P: AsRef<Path>> ExportFile<T, P> {
     pub fn new(file: T, file_name: P) -> Self {
         Self { file, file_name }
     }

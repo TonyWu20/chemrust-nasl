@@ -3,8 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use castep_cell_io_v02::{CastepTask, CellDocument, EnergyCutoff};
-use castep_seeding::{CellBuilding, ParamBuilding};
+use castep_cell_io::CellDocument;
+use castep_seeding::{cell_to_string, CastepTask, CellBuilding, EnergyCutoff, ParamBuilding};
 
 use crate::{error::RunError, execution::ExportFile};
 pub use potentials_io::{get_all_potentials, get_potential_entries, PotentialFileBytes};
@@ -36,7 +36,7 @@ impl ParamBuilding for Configurator {
         &self,
         template_cell: &CellDocument,
         castep_task: CastepTask,
-    ) -> Result<castep_param_io::param::CastepParam, castep_seeding::SeedingErrors> {
+    ) -> Result<castep_seeding::param::CastepParam, castep_seeding::SeedingErrors> {
         match castep_task {
             CastepTask::BandStructure => self.dos_param_template(
                 template_cell,
@@ -50,6 +50,7 @@ impl ParamBuilding for Configurator {
                 self.use_edft,
                 &self.potentials_loc,
             ),
+            _ => unreachable!("only BandStructure and GeometryOptimization are seeded"),
         }
     }
 }
@@ -79,17 +80,15 @@ pub fn create_seed_files<P: AsRef<Path>>(
     let geom_cell = create_file(
         target_dir,
         base_doc.file_name(),
-        config
-            .build_cell_for_task(base_doc.file(), CastepTask::GeometryOptimization)
-            .to_string()
-            .into_bytes(),
+        cell_to_string(
+            &config.build_cell_for_task(base_doc.file(), CastepTask::GeometryOptimization),
+        )
+        .into_bytes(),
     );
     let dos_cell = create_file(
         target_dir,
         format!("{}_DOS.cell", file_stem),
-        config
-            .build_cell_for_task(base_doc.file(), CastepTask::BandStructure)
-            .to_string()
+        cell_to_string(&config.build_cell_for_task(base_doc.file(), CastepTask::BandStructure))
             .into_bytes(),
     );
     let geom_param = create_file(

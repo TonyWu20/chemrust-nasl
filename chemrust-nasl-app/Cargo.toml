@@ -24,13 +24,9 @@ serde_yaml = "0.9.34"
 serde = {version = "1.0", features = ["derive"]}
 nalgebra = "0.33"
 crystal-cif-io = "0.2.0"
-castep-seeding = {git = "https://github.com/TonyWu20/castep-seeding"}
-# The seeding seam (castep-seeding traits) is still built against the
-# 0.2.x castep stack. This alias keeps it until castep-seeding moves.
-castep_cell_io_v02 = { package = "castep-cell-io", version = "0.2.18" }
+castep-seeding = {git = "https://github.com/TonyWu20/castep-seeding", rev = "1264694e0ba4044891290a4abf4d7cd2237636f0"}
 anyhow = "1.0.94"
 thiserror = "2.0.9"
-castep-param-io = "0.1.2"
 
 [lib]
 name="rhino_lib"
