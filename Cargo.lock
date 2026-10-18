@@ -256,11 +256,15 @@ version = "0.4.0"
 dependencies = [
  "castep-cell-fmt",
  "castep-cell-io",
+ "castep-periodic-table",
  "chemrust-geometry",
+ "crystal-cif-io",
  "elements_rs",
  "kd-tree",
  "nalgebra",
  "rayon",
+ "serde",
+ "serde_json",
  "strum",
 ]
 

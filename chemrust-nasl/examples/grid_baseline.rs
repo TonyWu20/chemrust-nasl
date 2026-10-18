@@ -1,0 +1,355 @@
+//! Grid-search completeness baseline, part 1 of `docs/benchmarks.md`.
+//!
+//! A voxel grid fills the Cartesian box of the model atoms. A grid
+//! point is a candidate when no atom is closer than r and at least
+//! one atom sits in the window [r, r + delta]. Candidates cluster by
+//! 26-neighborhood. The metrics compare the clusters and candidates
+//! against the exact `SearchConfig` result.
+//!
+//! Usage:
+//!   cargo run -p chemrust-nasl --release --example grid_baseline -- \
+//!       <model.cell|model.cif> <bondlength> [--step 0.05] [--delta 0.1] \
+//!       [--out FILE.json]
+
+mod bench_common;
+
+use std::collections::{HashMap, VecDeque};
+use std::fs::write;
+use std::path::PathBuf;
+
+use chemrust_nasl::{SearchConfig, SearchReports};
+use kd_tree::KdIndexTree;
+use nalgebra::{distance_squared, Point3, Vector3};
+use rayon::prelude::*;
+use serde::Serialize;
+
+/// Tolerance on the squared-distance scale, matching the engine.
+const TOL: f64 = 1.0e-5;
+
+/// One candidate cell: grid indices plus the bond class.
+/// Class 1 = single, 2 = double, 3 = multi.
+type Cell = (usize, usize, usize, u8);
+
+#[derive(Serialize)]
+struct Counts {
+    multi: usize,
+    single: usize,
+    double: usize,
+}
+
+#[derive(Serialize)]
+struct ResultJson {
+    benchmark: &'static str,
+    model: String,
+    bondlength: f64,
+    step: f64,
+    delta: f64,
+    atom_count: usize,
+    site_counts: Counts,
+    candidate_counts: Counts,
+    cluster_count: usize,
+    matched_sites: usize,
+    total_sites: usize,
+    match_rate: f64,
+    missed_clusters: usize,
+    max_site_candidate_err: f64,
+    context: bench_common::hardware_spec::Context,
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let mut model = None;
+    let mut bondlength: Option<f64> = None;
+    let mut step = 0.05_f64;
+    let mut delta = 0.1_f64;
+    let mut out: Option<PathBuf> = None;
+    let mut it = args.into_iter().skip(1);
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--step" => step = it.next().expect("--step takes a value").parse().expect("number"),
+            "--delta" => delta = it.next().expect("--delta takes a value").parse().expect("number"),
+            "--out" => out = Some(PathBuf::from(it.next().expect("--out takes a value"))),
+            _ if model.is_none() => model = Some(PathBuf::from(a)),
+            _ if bondlength.is_none() => {
+                bondlength = Some(a.parse().expect("bondlength in Angstrom"))
+            }
+            _ => eprintln!("unexpected argument {a:?}"),
+        }
+    }
+    let model_path = model.expect("usage: <model> <bondlength> [--step S] [--delta D]");
+    let r = bondlength.expect("usage: <model> <bondlength> [--step S] [--delta D]");
+
+    let structure = bench_common::bench_model::load_structure(&model_path).expect("load model");
+    let points = bench_common::bench_model::cart_points(&structure);
+    let to_check: Vec<(usize, Point3<f64>)> =
+        points.iter().enumerate().map(|(i, p)| (i, *p)).collect();
+    let config = SearchConfig::new(&to_check, &points, r);
+    let report = config.search_sites();
+    let sites = site_points(&report);
+
+    let (cand_cells, cand_points) = scan_candidates(&points, r, delta, step);
+    let cand_counts = class_counts(&cand_cells);
+    let cluster_count = cluster_candidates(&cand_cells);
+    let (matched, max_err, missed) = match_sites(&sites, &cand_points, &cand_cells, step);
+
+    let json = ResultJson {
+        benchmark: "grid_baseline",
+        model: model_path.to_string_lossy().to_string(),
+        bondlength: r,
+        step,
+        delta,
+        atom_count: points.len(),
+        site_counts: class_counts_from_report(&report),
+        candidate_counts: cand_counts,
+        cluster_count,
+        matched_sites: matched,
+        total_sites: sites.len(),
+        match_rate: if sites.is_empty() {
+            0.0
+        } else {
+            matched as f64 / sites.len() as f64
+        },
+        missed_clusters: missed,
+        max_site_candidate_err: max_err,
+        context: bench_common::hardware_spec::Context::capture(rayon::current_num_threads()),
+    };
+    let text = serde_json::to_string_pretty(&json).expect("serialize result");
+    match out {
+        Some(path) => write(path, text).expect("write result file"),
+        None => println!("{text}"),
+    }
+}
+
+/// All exact sites of the report as plain points.
+fn site_points(report: &SearchReports) -> Vec<Point3<f64>> {
+    let mut sites = report
+        .points()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| p.point())
+        .collect::<Vec<Point3<f64>>>();
+    if let Some(v) = report.viable_single_points() {
+        sites.extend(v.iter().map(|p| p.point()));
+    }
+    if let Some(v) = report.viable_double_points() {
+        sites.extend(v.iter().map(|p| p.point()));
+    }
+    sites
+}
+
+/// Scan the voxel grid and return candidate cells plus their points.
+fn scan_candidates(points: &[Point3<f64>], r: f64, delta: f64, step: f64) -> (Vec<Cell>, Vec<Point3<f64>>) {
+    let mut lo = points[0];
+    let mut hi = points[0];
+    for p in points {
+        lo.x = lo.x.min(p.x);
+        lo.y = lo.y.min(p.y);
+        lo.z = lo.z.min(p.z);
+        hi.x = hi.x.max(p.x);
+        hi.y = hi.y.max(p.y);
+        hi.z = hi.z.max(p.z);
+    }
+    let grow = r + delta;
+    lo -= Vector3::new(grow, grow, grow);
+    hi += Vector3::new(grow, grow, grow);
+    let dims = [
+        ((hi.x - lo.x) / step).ceil().max(1.0) as usize,
+        ((hi.y - lo.y) / step).ceil().max(1.0) as usize,
+        ((hi.z - lo.z) / step).ceil().max(1.0) as usize,
+    ];
+
+    let atom_tree = KdIndexTree::build_by_ordered_float(points);
+    let r2 = r * r;
+    let win2 = (r + delta) * (r + delta);
+
+    let rows: Vec<Vec<Cell>> = (0..dims[0])
+        .into_par_iter()
+        .map(|i| {
+            let mut local: Vec<Cell> = Vec::new();
+            for j in 0..dims[1] {
+                for k in 0..dims[2] {
+                    let p = Point3::new(
+                        lo.x + i as f64 * step,
+                        lo.y + j as f64 * step,
+                        lo.z + k as f64 * step,
+                    );
+                    let mut in_window = 0;
+                    let mut closer = 0;
+                    for &id in atom_tree.within_radius(&p, r + delta) {
+                        let d2 = distance_squared(&p, atom_tree.item(id));
+                        if d2 < r2 - TOL {
+                            closer += 1;
+                        } else if d2 <= win2 + TOL {
+                            in_window += 1;
+                        }
+                    }
+                    if closer == 0 && in_window > 0 {
+                        let class = if in_window == 1 {
+                            1
+                        } else if in_window == 2 {
+                            2
+                        } else {
+                            3
+                        };
+                        local.push((i, j, k, class));
+                    }
+                }
+            }
+            local
+        })
+        .collect();
+    let cand_cells: Vec<Cell> = rows.into_iter().flatten().collect();
+    let cand_points = cand_cells
+        .iter()
+        .map(|&(i, j, k, _)| {
+            Point3::new(
+                lo.x + i as f64 * step,
+                lo.y + j as f64 * step,
+                lo.z + k as f64 * step,
+            )
+        })
+        .collect();
+    (cand_cells, cand_points)
+}
+
+/// 26-neighborhood BFS over the candidate grid.
+fn cluster_candidates(cand_cells: &[Cell]) -> usize {
+    if cand_cells.is_empty() {
+        return 0;
+    }
+    let index: HashMap<(usize, usize, usize), usize> = cand_cells
+        .iter()
+        .enumerate()
+        .map(|(n, &(i, j, k, _))| ((i, j, k), n))
+        .collect();
+    let mut visited = vec![false; cand_cells.len()];
+    let mut clusters = 0;
+    for start in 0..cand_cells.len() {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        clusters += 1;
+        let mut queue = VecDeque::new();
+        queue.push_back(start);
+        while let Some(cur) = queue.pop_front() {
+            let (ci, cj, ck, _) = cand_cells[cur];
+            for di in -1_i32..=1 {
+                for dj in -1_i32..=1 {
+                    for dk in -1_i32..=1 {
+                        if di == 0 && dj == 0 && dk == 0 {
+                            continue;
+                        }
+                        let ni = (ci as i32 + di).max(0) as usize;
+                        let nj = (cj as i32 + dj).max(0) as usize;
+                        let nk = (ck as i32 + dk).max(0) as usize;
+                        if let Some(&n) = index.get(&(ni, nj, nk)) {
+                            if !visited[n] {
+                                visited[n] = true;
+                                queue.push_back(n);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    clusters
+}
+
+/// Match exact sites to candidates and flag unmatched clusters.
+///
+/// A cluster is missed when its seed point has no exact site within
+/// one grid step.
+fn match_sites(
+    sites: &[Point3<f64>],
+    cand_points: &[Point3<f64>],
+    cand_cells: &[Cell],
+    step: f64,
+) -> (usize, f64, usize) {
+    if sites.is_empty() {
+        return (0, 0.0, 0);
+    }
+    let cand_tree = KdIndexTree::build_by_ordered_float(cand_points);
+    let site_tree = KdIndexTree::build_by_ordered_float(sites);
+    let mut matched = 0;
+    let mut max_err = 0.0_f64;
+    for p in sites {
+        let hits = cand_tree.within_radius(p, step);
+        if hits.is_empty() {
+            continue;
+        }
+        matched += 1;
+        let err = hits
+            .iter()
+            .map(|&&id| distance_squared(&cand_points[id], p))
+            .fold(f64::INFINITY, f64::min)
+            .sqrt();
+        max_err = max_err.max(err);
+    }
+    let index: HashMap<(usize, usize, usize), usize> = cand_cells
+        .iter()
+        .enumerate()
+        .map(|(n, &(i, j, k, _))| ((i, j, k), n))
+        .collect();
+    let mut visited = vec![false; cand_cells.len()];
+    let mut missed = 0;
+    for start in 0..cand_cells.len() {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        let mut queue = VecDeque::new();
+        queue.push_back(start);
+        while let Some(cur) = queue.pop_front() {
+            let (a, b, c, _) = cand_cells[cur];
+            for di in -1_i32..=1 {
+                for dj in -1_i32..=1 {
+                    for dk in -1_i32..=1 {
+                        if di == 0 && dj == 0 && dk == 0 {
+                            continue;
+                        }
+                        let na = (a as i32 + di).max(0) as usize;
+                        let nb = (b as i32 + dj).max(0) as usize;
+                        let nc = (c as i32 + dk).max(0) as usize;
+                        if let Some(&n) = index.get(&(na, nb, nc)) {
+                            if !visited[n] {
+                                visited[n] = true;
+                                queue.push_back(n);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if site_tree.within_radius(&cand_points[start], step).is_empty() {
+            missed += 1;
+        }
+    }
+    (matched, max_err, missed)
+}
+
+fn class_counts(cells: &[Cell]) -> Counts {
+    let mut c = Counts {
+        multi: 0,
+        single: 0,
+        double: 0,
+    };
+    for cell in cells {
+        match cell.3 {
+            1 => c.single += 1,
+            2 => c.double += 1,
+            _ => c.multi += 1,
+        }
+    }
+    c
+}
+
+fn class_counts_from_report(report: &SearchReports) -> Counts {
+    Counts {
+        multi: report.points().map(|v| v.len()).unwrap_or(0),
+        single: report.viable_single_points().map(|v| v.len()).unwrap_or(0),
+        double: report.viable_double_points().map(|v| v.len()).unwrap_or(0),
+    }
+}

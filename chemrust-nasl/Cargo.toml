@@ -24,3 +24,9 @@ rayon = "1.10"
 [dev-dependencies]
 castep-cell-io = "0.7.0"
 castep-cell-fmt = "0.3.0"
+castep-periodic-table = "0.5.2"
+crystal-cif-io = "0.2.0"
+kd-tree = {git = "https://github.com/TonyWu20/kd-tree", features = ["nalgebra"]}
+rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
