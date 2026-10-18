@@ -56,7 +56,6 @@ fn mem_total_mib() -> usize {
         for line in text.lines() {
             if let Some(rest) = line.strip_prefix("MemTotal:") {
                 let kb: f64 = rest
-                    .trim()
                     .split_whitespace()
                     .next()
                     .unwrap_or("0")
