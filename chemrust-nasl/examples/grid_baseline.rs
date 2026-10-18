@@ -1,21 +1,29 @@
-//! Grid-search completeness baseline, part 1 of `docs/benchmarks.md`.
+//! Grid-search completeness baseline and accuracy-cost sweep,
+//! part 1 of `docs/benchmarks.md`.
 //!
 //! A voxel grid fills the Cartesian box of the model atoms. A grid
 //! point is a candidate when no atom is closer than r and at least
 //! one atom sits in the window [r, r + delta]. Candidates cluster by
-//! 26-neighborhood. The metrics compare the clusters and candidates
-//! against the exact `SearchConfig` result.
+//! 26-neighborhood. The per-step metrics compare the grid against the
+//! exact `SearchConfig` result.
+//!
+//! `--sweep N` runs the baseline at step, step/2, ..., step/2^(N-1).
+//! The sweep exposes the trade-off: a coarse step misses exact sites
+//! (incomplete), a fine step covers them but pays in candidate count
+//! and scan time. The exact engine covers all sites in one
+//! closed-form pass with no step parameter.
 //!
 //! Usage:
 //!   cargo run -p chemrust-nasl --release --example grid_baseline -- \
 //!       <model.cell|model.cif> <bondlength> [--step 0.05] [--delta 0.1] \
-//!       [--out FILE.json]
+//!       [--sweep N] [--out FILE.json]
 
 mod bench_common;
 
 use std::collections::{HashMap, VecDeque};
 use std::fs::write;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use chemrust_nasl::{SearchConfig, SearchReports};
 use kd_tree::KdIndexTree;
@@ -37,22 +45,31 @@ struct Counts {
     double: usize,
 }
 
+/// Metrics for one grid step.
+#[derive(Serialize)]
+struct StepBlock {
+    step: f64,
+    scan_ms: f64,
+    candidate_total: usize,
+    candidate_counts: Counts,
+    cluster_count: usize,
+    matched_sites: usize,
+    missed_sites: usize,
+    spurious_clusters: usize,
+    total_sites: usize,
+    match_rate: f64,
+    max_site_candidate_err: f64,
+}
+
 #[derive(Serialize)]
 struct ResultJson {
     benchmark: &'static str,
     model: String,
     bondlength: f64,
-    step: f64,
     delta: f64,
     atom_count: usize,
     site_counts: Counts,
-    candidate_counts: Counts,
-    cluster_count: usize,
-    matched_sites: usize,
-    total_sites: usize,
-    match_rate: f64,
-    missed_clusters: usize,
-    max_site_candidate_err: f64,
+    steps: Vec<StepBlock>,
     context: bench_common::hardware_spec::Context,
 }
 
@@ -62,12 +79,14 @@ fn main() {
     let mut bondlength: Option<f64> = None;
     let mut step = 0.05_f64;
     let mut delta = 0.1_f64;
+    let mut sweep = 1;
     let mut out: Option<PathBuf> = None;
     let mut it = args.into_iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
             "--step" => step = it.next().expect("--step takes a value").parse().expect("number"),
             "--delta" => delta = it.next().expect("--delta takes a value").parse().expect("number"),
+            "--sweep" => sweep = it.next().expect("--sweep takes a value").parse().expect("number"),
             "--out" => out = Some(PathBuf::from(it.next().expect("--out takes a value"))),
             _ if model.is_none() => model = Some(PathBuf::from(a)),
             _ if bondlength.is_none() => {
@@ -76,8 +95,8 @@ fn main() {
             _ => eprintln!("unexpected argument {a:?}"),
         }
     }
-    let model_path = model.expect("usage: <model> <bondlength> [--step S] [--delta D]");
-    let r = bondlength.expect("usage: <model> <bondlength> [--step S] [--delta D]");
+    let model_path = model.expect("usage: <model> <bondlength> [--step S] [--delta D] [--sweep N]");
+    let r = bondlength.expect("usage: <model> <bondlength> [--step S] [--delta D] [--sweep N]");
 
     let structure = bench_common::bench_model::load_structure(&model_path).expect("load model");
     let points = bench_common::bench_model::cart_points(&structure);
@@ -87,36 +106,52 @@ fn main() {
     let report = config.search_sites();
     let sites = site_points(&report);
 
-    let (cand_cells, cand_points) = scan_candidates(&points, r, delta, step);
-    let cand_counts = class_counts(&cand_cells);
-    let cluster_count = cluster_candidates(&cand_cells);
-    let (matched, max_err, missed) = match_sites(&sites, &cand_points, &cand_cells, step);
+    let steps: Vec<f64> = (0..sweep.max(1)).map(|i| step / 2_f64.powi(i as i32)).collect();
+    let mut blocks = Vec::with_capacity(steps.len());
+    for s in &steps {
+        blocks.push(run_step(&points, &sites, r, delta, *s));
+    }
 
     let json = ResultJson {
         benchmark: "grid_baseline",
         model: model_path.to_string_lossy().to_string(),
         bondlength: r,
-        step,
         delta,
         atom_count: points.len(),
         site_counts: class_counts_from_report(&report),
-        candidate_counts: cand_counts,
-        cluster_count,
-        matched_sites: matched,
-        total_sites: sites.len(),
-        match_rate: if sites.is_empty() {
-            0.0
-        } else {
-            matched as f64 / sites.len() as f64
-        },
-        missed_clusters: missed,
-        max_site_candidate_err: max_err,
+        steps: blocks,
         context: bench_common::hardware_spec::Context::capture(rayon::current_num_threads()),
     };
     let text = serde_json::to_string_pretty(&json).expect("serialize result");
     match out {
         Some(path) => write(path, text).expect("write result file"),
         None => println!("{text}"),
+    }
+}
+
+/// One grid step: scan, cluster, and match against the exact sites.
+fn run_step(points: &[Point3<f64>], sites: &[Point3<f64>], r: f64, delta: f64, step: f64) -> StepBlock {
+    let t0 = Instant::now();
+    let (cand_cells, cand_points) = scan_candidates(points, r, delta, step);
+    let scan_ms = t0.elapsed().as_secs_f64() * 1e3;
+    let cand_counts = class_counts(&cand_cells);
+    let cluster_count = cluster_candidates(&cand_cells);
+    let (matched, max_err, spurious) = match_sites(sites, &cand_points, &cand_cells, delta);
+    // `step` is intentionally not the match tolerance: completeness is
+    // measured against a fixed physical tolerance, independent of the grid step.
+    let total = sites.len();
+    StepBlock {
+        step,
+        scan_ms,
+        candidate_total: cand_cells.len(),
+        candidate_counts: cand_counts,
+        cluster_count,
+        matched_sites: matched,
+        missed_sites: total - matched,
+        spurious_clusters: spurious,
+        total_sites: total,
+        match_rate: if total == 0 { 0.0 } else { matched as f64 / total as f64 },
+        max_site_candidate_err: max_err,
     }
 }
 
@@ -260,13 +295,14 @@ fn cluster_candidates(cand_cells: &[Cell]) -> usize {
 
 /// Match exact sites to candidates and flag unmatched clusters.
 ///
-/// A cluster is missed when its seed point has no exact site within
-/// one grid step.
+/// `missed` sites are exact sites with no candidate within the fixed
+/// physical tolerance `tol` (grid false negatives). A `spurious` cluster
+/// has no exact site within `tol` of its seed point.
 fn match_sites(
     sites: &[Point3<f64>],
     cand_points: &[Point3<f64>],
     cand_cells: &[Cell],
-    step: f64,
+    tol: f64,
 ) -> (usize, f64, usize) {
     if sites.is_empty() {
         return (0, 0.0, 0);
@@ -276,7 +312,7 @@ fn match_sites(
     let mut matched = 0;
     let mut max_err = 0.0_f64;
     for p in sites {
-        let hits = cand_tree.within_radius(p, step);
+        let hits = cand_tree.within_radius(p, tol);
         if hits.is_empty() {
             continue;
         }
@@ -294,7 +330,7 @@ fn match_sites(
         .map(|(n, &(i, j, k, _))| ((i, j, k), n))
         .collect();
     let mut visited = vec![false; cand_cells.len()];
-    let mut missed = 0;
+    let mut spurious = 0;
     for start in 0..cand_cells.len() {
         if visited[start] {
             continue;
@@ -323,11 +359,11 @@ fn match_sites(
                 }
             }
         }
-        if site_tree.within_radius(&cand_points[start], step).is_empty() {
-            missed += 1;
+        if site_tree.within_radius(&cand_points[start], tol).is_empty() {
+            spurious += 1;
         }
     }
-    (matched, max_err, missed)
+    (matched, max_err, spurious)
 }
 
 fn class_counts(cells: &[Cell]) -> Counts {
