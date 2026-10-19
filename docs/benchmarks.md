@@ -13,7 +13,6 @@ A brute-force voxel reference that the exact result is checked against.
   least one atom sits in the window [r, r + delta].
 - Double candidates need two atoms in the window.
 - Multi candidates need three or more.
-- Candidates cluster by 26-neighborhood.
 
 A z-pinned variant of this scan runs inside `scalability` (Part 3):
 the in-plane box is the surface area and the z range is the surface
@@ -23,10 +22,9 @@ surface area.
 Completeness is measured against a fixed physical tolerance `delta`,
 independent of the grid step. Per step the result records:
 
-- scan time and candidate count (cost side),
-- matched / missed sites (completeness side),
-- spurious clusters (redundancy side),
-- the largest site-to-candidate error.
+- scan time and candidate count (cost and redundancy),
+- matched / missed sites (completeness),
+- the largest site-to-candidate error (accuracy).
 
 `--sweep N` runs the baseline at step, step/2, ..., step/2^(N-1) and
 emits one block per step. This exposes the trade-off: a coarse step

@@ -114,7 +114,7 @@ fn site_counts(report: &SearchReports) -> SiteCounts {
 /// FNV-1a over the sorted site coordinates of a report.
 fn site_set_hash(report: &SearchReports) -> String {
     let bytes = site_set_bytes(report);
-    let mut hash: u32 = 0x811_c9dc_5;
+    let mut hash: u32 = 0x811c_9dc5;
     for b in bytes {
         hash ^= u32::from(b);
         hash = hash.wrapping_mul(0x0100_0193);

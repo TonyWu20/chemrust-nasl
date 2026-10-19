@@ -3,9 +3,8 @@
 //!
 //! A voxel grid fills the Cartesian box of the model atoms. A grid
 //! point is a candidate when no atom is closer than r and at least
-//! one atom sits in the window [r, r + delta]. Candidates cluster by
-//! 26-neighborhood. The per-step metrics compare the grid against the
-//! exact `SearchConfig` result.
+//! one atom sits in the window [r, r + delta]. The per-step metrics
+//! compare the grid against the exact `SearchConfig` result.
 //!
 //! `--sweep N` runs the baseline at step, step/2, ..., step/2^(N-1).
 //! The sweep exposes the trade-off: a coarse step misses exact sites
@@ -20,7 +19,6 @@
 
 mod bench_common;
 
-use std::collections::{HashMap, VecDeque};
 use std::fs::write;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -52,10 +50,8 @@ struct StepBlock {
     scan_ms: f64,
     candidate_total: usize,
     candidate_counts: Counts,
-    cluster_count: usize,
     matched_sites: usize,
     missed_sites: usize,
-    spurious_clusters: usize,
     total_sites: usize,
     match_rate: f64,
     max_site_candidate_err: f64,
@@ -106,7 +102,7 @@ fn main() {
     let report = config.search_sites();
     let sites = site_points(&report);
 
-    let steps: Vec<f64> = (0..sweep.max(1)).map(|i| step / 2_f64.powi(i as i32)).collect();
+    let steps: Vec<f64> = (0..sweep.max(1)).map(|i| step / 2_f64.powi(i)).collect();
     let mut blocks = Vec::with_capacity(steps.len());
     for s in &steps {
         blocks.push(run_step(&points, &sites, r, delta, *s));
@@ -129,14 +125,13 @@ fn main() {
     }
 }
 
-/// One grid step: scan, cluster, and match against the exact sites.
+/// One grid step: scan and match against the exact sites.
 fn run_step(points: &[Point3<f64>], sites: &[Point3<f64>], r: f64, delta: f64, step: f64) -> StepBlock {
     let t0 = Instant::now();
     let (cand_cells, cand_points) = scan_candidates(points, r, delta, step);
     let scan_ms = t0.elapsed().as_secs_f64() * 1e3;
     let cand_counts = class_counts(&cand_cells);
-    let cluster_count = cluster_candidates(&cand_cells);
-    let (matched, max_err, spurious) = match_sites(sites, &cand_points, &cand_cells, delta);
+    let (matched, max_err) = match_sites(sites, &cand_points, delta);
     // `step` is intentionally not the match tolerance: completeness is
     // measured against a fixed physical tolerance, independent of the grid step.
     let total = sites.len();
@@ -145,10 +140,8 @@ fn run_step(points: &[Point3<f64>], sites: &[Point3<f64>], r: f64, delta: f64, s
         scan_ms,
         candidate_total: cand_cells.len(),
         candidate_counts: cand_counts,
-        cluster_count,
         matched_sites: matched,
         missed_sites: total - matched,
-        spurious_clusters: spurious,
         total_sites: total,
         match_rate: if total == 0 { 0.0 } else { matched as f64 / total as f64 },
         max_site_candidate_err: max_err,
@@ -248,67 +241,19 @@ fn scan_candidates(points: &[Point3<f64>], r: f64, delta: f64, step: f64) -> (Ve
     (cand_cells, cand_points)
 }
 
-/// 26-neighborhood BFS over the candidate grid.
-fn cluster_candidates(cand_cells: &[Cell]) -> usize {
-    if cand_cells.is_empty() {
-        return 0;
-    }
-    let index: HashMap<(usize, usize, usize), usize> = cand_cells
-        .iter()
-        .enumerate()
-        .map(|(n, &(i, j, k, _))| ((i, j, k), n))
-        .collect();
-    let mut visited = vec![false; cand_cells.len()];
-    let mut clusters = 0;
-    for start in 0..cand_cells.len() {
-        if visited[start] {
-            continue;
-        }
-        visited[start] = true;
-        clusters += 1;
-        let mut queue = VecDeque::new();
-        queue.push_back(start);
-        while let Some(cur) = queue.pop_front() {
-            let (ci, cj, ck, _) = cand_cells[cur];
-            for di in -1_i32..=1 {
-                for dj in -1_i32..=1 {
-                    for dk in -1_i32..=1 {
-                        if di == 0 && dj == 0 && dk == 0 {
-                            continue;
-                        }
-                        let ni = (ci as i32 + di).max(0) as usize;
-                        let nj = (cj as i32 + dj).max(0) as usize;
-                        let nk = (ck as i32 + dk).max(0) as usize;
-                        if let Some(&n) = index.get(&(ni, nj, nk)) {
-                            if !visited[n] {
-                                visited[n] = true;
-                                queue.push_back(n);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    clusters
-}
-
-/// Match exact sites to candidates and flag unmatched clusters.
-///
-/// `missed` sites are exact sites with no candidate within the fixed
-/// physical tolerance `tol` (grid false negatives). A `spurious` cluster
-/// has no exact site within `tol` of its seed point.
+/// Match exact sites to candidates. A site is matched when a
+/// candidate sits within the fixed physical tolerance `tol`. That
+/// tolerance is independent of the grid step. Returns the matched
+/// count and the largest site-to-candidate error over matched sites.
 fn match_sites(
     sites: &[Point3<f64>],
     cand_points: &[Point3<f64>],
-    cand_cells: &[Cell],
     tol: f64,
-) -> (usize, f64, usize) {
+) -> (usize, f64) {
     if sites.is_empty() {
-        return (0, 0.0, 0);
+        return (0, 0.0);
     }
     let cand_tree = KdIndexTree::build_by_ordered_float(cand_points);
-    let site_tree = KdIndexTree::build_by_ordered_float(sites);
     let mut matched = 0;
     let mut max_err = 0.0_f64;
     for p in sites {
@@ -324,46 +269,7 @@ fn match_sites(
             .sqrt();
         max_err = max_err.max(err);
     }
-    let index: HashMap<(usize, usize, usize), usize> = cand_cells
-        .iter()
-        .enumerate()
-        .map(|(n, &(i, j, k, _))| ((i, j, k), n))
-        .collect();
-    let mut visited = vec![false; cand_cells.len()];
-    let mut spurious = 0;
-    for start in 0..cand_cells.len() {
-        if visited[start] {
-            continue;
-        }
-        visited[start] = true;
-        let mut queue = VecDeque::new();
-        queue.push_back(start);
-        while let Some(cur) = queue.pop_front() {
-            let (a, b, c, _) = cand_cells[cur];
-            for di in -1_i32..=1 {
-                for dj in -1_i32..=1 {
-                    for dk in -1_i32..=1 {
-                        if di == 0 && dj == 0 && dk == 0 {
-                            continue;
-                        }
-                        let na = (a as i32 + di).max(0) as usize;
-                        let nb = (b as i32 + dj).max(0) as usize;
-                        let nc = (c as i32 + dk).max(0) as usize;
-                        if let Some(&n) = index.get(&(na, nb, nc)) {
-                            if !visited[n] {
-                                visited[n] = true;
-                                queue.push_back(n);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if site_tree.within_radius(&cand_points[start], tol).is_empty() {
-            spurious += 1;
-        }
-    }
-    (matched, max_err, spurious)
+    (matched, max_err)
 }
 
 fn class_counts(cells: &[Cell]) -> Counts {

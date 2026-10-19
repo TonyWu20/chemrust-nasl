@@ -21,7 +21,6 @@
 
 mod bench_common;
 
-use std::collections::{HashMap, VecDeque};
 use std::fs::write;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -46,7 +45,6 @@ struct GridBlock {
     step: f64,
     scan_ms: f64,
     candidates: usize,
-    clusters: usize,
     matched_sites: usize,
     missed_sites: usize,
 }
@@ -196,13 +194,11 @@ fn main() {
             let z_hi = zmax * c_len;
             let (cand_cells, cand_points, scan_ms) =
                 z_pinned_scan(&points, bondlength, delta, step, z_lo, z_hi);
-            let clusters = cluster_candidates(&cand_cells);
-            let (matched, missed) = match_sites(&exact_sites, &cand_points, &cand_cells, delta);
+            let (matched, missed) = match_sites(&exact_sites, &cand_points, delta);
             Some(GridBlock {
                 step,
                 scan_ms,
                 candidates: cand_cells.len(),
-                clusters,
                 matched_sites: matched,
                 missed_sites: missed,
             })
@@ -225,7 +221,7 @@ fn main() {
             Some(g) => println!(
                 "{species}{hkl:?} s={s} atoms={:3} anchors={:3}  \
                  multi/single/double={}/{}/{}  exact~{:.1} ms  \
-                 grid(step={}) cands={} clusters={} matched={}/{} {}ms",
+                 grid(step={}) cands={} matched={}/{} {}ms",
                 points.len(),
                 to_check.len(),
                 multi,
@@ -234,7 +230,6 @@ fn main() {
                 mean_ms,
                 g.step,
                 g.candidates,
-                g.clusters,
                 g.matched_sites,
                 exact_sites.len(),
                 g.scan_ms
@@ -396,60 +391,10 @@ fn site_points(report: &chemrust_nasl::SearchReports) -> Vec<Point3<f64>> {
     sites
 }
 
-/// 26-neighborhood cluster count over candidate cells.
-fn cluster_candidates(cand_cells: &[Cell]) -> usize {
-    if cand_cells.is_empty() {
-        return 0;
-    }
-    let index: HashMap<(usize, usize, usize), usize> = cand_cells
-        .iter()
-        .enumerate()
-        .map(|(n, &(i, j, k, _))| ((i, j, k), n))
-        .collect();
-    let mut visited = vec![false; cand_cells.len()];
-    let mut clusters = 0;
-    for start in 0..cand_cells.len() {
-        if visited[start] {
-            continue;
-        }
-        visited[start] = true;
-        clusters += 1;
-        let mut queue = VecDeque::new();
-        queue.push_back(start);
-        while let Some(cur) = queue.pop_front() {
-            let (ci, cj, ck, _) = cand_cells[cur];
-            for di in -1_i32..=1 {
-                for dj in -1_i32..=1 {
-                    for dk in -1_i32..=1 {
-                        if di == 0 && dj == 0 && dk == 0 {
-                            continue;
-                        }
-                        let ni = (ci as i32 + di).max(0) as usize;
-                        let nj = (cj as i32 + dj).max(0) as usize;
-                        let nk = (ck as i32 + dk).max(0) as usize;
-                        if let Some(&n) = index.get(&(ni, nj, nk)) {
-                            if !visited[n] {
-                                visited[n] = true;
-                                queue.push_back(n);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    clusters
-}
-
-/// Match exact sites to candidate clusters. A site is matched when a
+/// Match exact sites to candidates. A site is matched when a
 /// candidate sits within the fixed physical tolerance `tol`. Returns
 /// (matched, missed).
-fn match_sites(
-    sites: &[Point3<f64>],
-    cand_points: &[Point3<f64>],
-    _cand_cells: &[Cell],
-    tol: f64,
-) -> (usize, usize) {
+fn match_sites(sites: &[Point3<f64>], cand_points: &[Point3<f64>], tol: f64) -> (usize, usize) {
     if cand_points.is_empty() {
         return (0, sites.len());
     }
