@@ -15,6 +15,11 @@ A brute-force voxel reference that the exact result is checked against.
 - Multi candidates need three or more.
 - Candidates cluster by 26-neighborhood.
 
+A z-pinned variant of this scan runs inside `scalability` (Part 3):
+the in-plane box is the surface area and the z range is the surface
++ vacuum band. This keeps the exact-versus-grid comparison on
+surface area.
+
 Completeness is measured against a fixed physical tolerance `delta`,
 independent of the grid step. Per step the result records:
 
@@ -44,14 +49,22 @@ Every result file carries this context block:
 - Rust toolchain version, code git commit, and build profile.
 - A note on frequency scaling when the host cannot pin clocks.
 
-## Part 3: scalability run (`scalability`)
+## Part 3: surface-area scalability run (`scalability`)
 
-- Build an in-memory fcc slab family of growing atom count.
-- Time `search_sites` on each family member.
-- Record atom count, wall time, and the site count per class.
-- The curve shows how the exact engine scales. Cost tracks the
-  candidate-pair count (the local bond graph), so thick multi-layer
-  slabs cost more per atom than a single surface.
+- Build an in-memory fcc slab with a fixed layer count and vacuum
+  gap. The z axis is pinned to the surface + vacuum band, mirroring
+  the app per-axis range flags. Only the surface-band atoms act as
+  bond anchors.
+- Scale the in-plane supercell, i.e. the surface area. This is the
+  quantity that matters for high-throughput surface screening.
+- Time `search_sites` on each in-plane size. Record atom count,
+  anchor count, wall time, and the site count per class.
+- `--grid` adds a z-pinned voxel-grid baseline at the same surface
+  area, so the exact-versus-grid comparison is on surface area,
+  not layer depth.
+- The curve shows the exact engine scaling with surface area. The
+  grid emits redundant candidates and misses sites at a coarse
+  step, at the same surface area.
 
 Slab model generation for any base uses `make_slab`, which chains
 `chemrust-geometry` transforms: surface rotation, in-plane supercell,
